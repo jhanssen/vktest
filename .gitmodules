@@ -1,0 +1,9 @@
+[submodule "3rdparty/glm"]
+	path = 3rdparty/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "3rdparty/glfw"]
+	path = 3rdparty/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "3rdparty/shaderc"]
+	path = 3rdparty/shaderc
+	url = https://github.com/google/shaderc.git
