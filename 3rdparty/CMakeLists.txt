@@ -11,6 +11,7 @@ execute_process(
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/shaderc
     )
 
+add_subdirectory(cpp-httplib)
 add_subdirectory(glfw)
 add_subdirectory(glm)
 add_subdirectory(shaderc)

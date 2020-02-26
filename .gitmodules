@@ -16,3 +16,6 @@
 [submodule "3rdparty/libpng"]
 	path = 3rdparty/libpng
 	url = https://git.code.sf.net/p/libpng/code
+[submodule "3rdparty/cpp-httplib"]
+	path = 3rdparty/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git

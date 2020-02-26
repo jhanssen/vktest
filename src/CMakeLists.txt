@@ -24,5 +24,5 @@ include_directories(${THIRDPARTY_DIR}/libpng)
 include_directories(${THIRDPARTY_BINARY_DIR}/libpng)
 
 find_package(Vulkan REQUIRED)
-target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan shaderc nlohmann_json::nlohmann_json png_static webpdecoder)
+target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder)
 add_definitions(-DVULKAN_SDK=${VULKAN_SDK})
