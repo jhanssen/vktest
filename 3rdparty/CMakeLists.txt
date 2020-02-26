@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.11)
 set(SHADERC_SKIP_TESTS ON)
 set(JSON_BuildTests OFF)
 set(JSON_Install OFF)
+set(PNG_TESTS OFF)
+set(PNG_SHARED OFF)
 
 execute_process(
     COMMAND ./utils/git-sync-deps
@@ -13,3 +15,5 @@ add_subdirectory(glfw)
 add_subdirectory(glm)
 add_subdirectory(shaderc)
 add_subdirectory(json)
+add_subdirectory(libpng)
+add_subdirectory(libwebp)

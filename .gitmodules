@@ -10,3 +10,9 @@
 [submodule "3rdparty/json"]
 	path = 3rdparty/json
 	url = https://github.com/nlohmann/json.git
+[submodule "3rdparty/libwebp"]
+	path = 3rdparty/libwebp
+	url = https://github.com/webmproject/libwebp.git
+[submodule "3rdparty/libpng"]
+	path = 3rdparty/libpng
+	url = https://git.code.sf.net/p/libpng/code
