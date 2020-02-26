@@ -7,7 +7,7 @@ static inline Decoder::Format guessFormat(Decoder::Format from, const Buffer& da
 {
     if (from != Decoder::Format_Auto)
         return from;
-    if (data.size() >= 4 && memcmp(data.data(), ".PNG", 4) == 0)
+    if (data.size() >= 4 && memcmp(data.data(), "\211PNG", 4) == 0)
         return Decoder::Format_PNG;
     if (data.size() >= 16 && memcmp(data.data() + 8, "WEBPVP8", 7) == 0)
         return Decoder::Format_WEBP;
@@ -17,13 +17,19 @@ static inline Decoder::Format guessFormat(Decoder::Format from, const Buffer& da
 static inline Decoder::Image decodePNG(const Buffer& data)
 {
     auto png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    if (!png_ptr)
+    if (!png_ptr) {
         return Decoder::Image();
+    }
     auto info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr)
+    if (!info_ptr) {
         return Decoder::Image();
-    if (setjmp(png_jmpbuf(png_ptr)))
+    }
+
+    Decoder::Image img;
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
         return Decoder::Image();
+    }
     struct PngData {
         const Buffer& data;
         size_t read;
@@ -35,10 +41,9 @@ static inline Decoder::Image decodePNG(const Buffer& data)
         memcpy(outBytes, data->data.data() + data->read, byteCountToRead);
         data->read += byteCountToRead;
     });
-    png_set_sig_bytes(png_ptr, 8);
+    png_set_sig_bytes(png_ptr, 0);
     png_read_info(png_ptr, info_ptr);
 
-    Decoder::Image img;
     img.width = png_get_image_width(png_ptr, info_ptr);
     img.height = png_get_image_height(png_ptr, info_ptr);
     img.depth = png_get_bit_depth(png_ptr, info_ptr);
@@ -53,14 +58,15 @@ static inline Decoder::Image decodePNG(const Buffer& data)
     }
 
     png_read_update_info(png_ptr, info_ptr);
-    if (setjmp(png_jmpbuf(png_ptr)))
+    if (setjmp(png_jmpbuf(png_ptr))) {
         return Decoder::Image();
+    }
 
     const auto rowBytes = png_get_rowbytes(png_ptr, info_ptr);
-    img.bpl = rowBytes;
     png_bytep* row_pointers = static_cast<png_bytep*>(png_malloc(png_ptr, img.height * sizeof(png_bytep)));
     for (int y = 0; y < img.height; ++y)
         row_pointers[y] = static_cast<png_bytep>(png_malloc(png_ptr, rowBytes));
+
     png_read_image(png_ptr, row_pointers);
 
     for (int y = 0; y < img.height; ++y)
@@ -69,14 +75,17 @@ static inline Decoder::Image decodePNG(const Buffer& data)
     png_read_end(png_ptr, info_ptr);
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
 
+    img.bpl = rowBytes;
+
     return img;
 }
 
 static inline Decoder::Image decodeWEBP(const Buffer& data)
 {
     WebPBitstreamFeatures features;
-    if (WebPGetFeatures(data.data(), data.size(), &features) != VP8_STATUS_OK)
+    if (WebPGetFeatures(data.data(), data.size(), &features) != VP8_STATUS_OK) {
         return Decoder::Image();
+    }
     Decoder::Image img;
     img.width = img.bpl = features.width;
     img.height = features.height;
@@ -84,9 +93,10 @@ static inline Decoder::Image decodeWEBP(const Buffer& data)
     img.depth = 32;
 
     img.data.resize(img.width * img.height * 4);
-    auto out = WebPDecodeRGBAInto(data.data(), data.size(), img.data.data(), img.data.size(), img.width);
-    if (out == nullptr)
+    auto out = WebPDecodeRGBAInto(data.data(), data.size(), img.data.data(), img.data.size(), img.width * 4);
+    if (out == nullptr) {
         return Decoder::Image();
+    }
 
     return img;
 }
