@@ -35,8 +35,8 @@ const bool enableValidationLayers = false;
 bool enableValidationLayers = true;
 #endif
 
-const int WIDTH = 800;
-const int HEIGHT = 600;
+const int WIDTH = 1280;
+const int HEIGHT = 720;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 static std::vector<uint8_t> readFile(const std::string& filename)
