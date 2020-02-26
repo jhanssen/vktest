@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(SOURCES
     main.cpp
+    Buffer.cpp
     Decoder.cpp
     )
 
