@@ -109,9 +109,10 @@ static inline std::shared_ptr<Image> decodeWEBP(const Buffer& data)
 static inline std::shared_ptr<Image> decodeJPEG(const Buffer& data)
 {
     auto handle = tjInitDecompress();
-    int jpegSubsamp, width, height;
+    int width, height;
     auto bytes = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data.data()));
-    tjDecompressHeader2(handle, bytes, data.size(), &width, &height, &jpegSubsamp);
+    if (tjDecompressHeader(handle, bytes, data.size(), &width, &height) != 0)
+        return std::shared_ptr<Image>();
 
     auto img = std::make_shared<Image>();
     img->width = width;
@@ -122,7 +123,8 @@ static inline std::shared_ptr<Image> decodeJPEG(const Buffer& data)
 
     img->data.resize(width * height * 4);
 
-    tjDecompress2(handle, bytes, data.size(), img->data.data(), width, 0, height, TJPF_RGBA, TJFLAG_FASTDCT);
+    if (tjDecompress2(handle, bytes, data.size(), img->data.data(), width, 0, height, TJPF_RGBA, TJFLAG_FASTDCT) != 0)
+        return std::shared_ptr<Image>();
 
     tjDestroy(handle);
 
