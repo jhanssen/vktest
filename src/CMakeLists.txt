@@ -9,6 +9,7 @@ set(SOURCES
     main.cpp
     Buffer.cpp
     Decoder.cpp
+    Fetch.cpp
     )
 
 add_executable(vk ${SOURCES})

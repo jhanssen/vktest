@@ -19,8 +19,7 @@
 #include <unordered_set>
 
 #include "Decoder.h"
-#include <httplib.h>
-#include <LUrlParser.h>
+#include "Fetch.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -43,57 +42,6 @@ const int WIDTH = 1280;
 const int HEIGHT = 720;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-static std::vector<uint8_t> readFile(const std::string& filename)
-{
-    FILE* f = fopen(filename.c_str(), "r");
-    if (!f)
-        return std::vector<uint8_t>();
-    fseek(f, 0, SEEK_END);
-    const auto sz = ftell(f);
-    if (sz == 0) {
-        fclose(f);
-        return std::vector<uint8_t>();
-    }
-    fseek(f, 0, SEEK_SET);
-    std::vector<uint8_t> data;
-    data.resize(sz);
-    fread(data.data(), 1, sz, f);
-    fclose(f);
-    return data;
-
-}
-
-static inline Buffer fetch(const std::string& uri)
-{
-    const auto url = LUrlParser::ParseURL::parseURL(uri);
-    if (!url.isValid())
-        return Buffer();
-    if (url.scheme_ == "https") {
-        int port;
-        if (!url.getPort(&port))
-            port = 443;
-        httplib::SSLClient cli(url.host_, port);
-        auto res = cli.Get(("/" + url.path_).c_str());
-        if (res && res->status == 200 && !res->body.empty()) {
-            Buffer buf;
-            buf.assign(reinterpret_cast<uint8_t*>(&res->body[0]), res->body.size());
-            return buf;
-        }
-    } else if (url.scheme_ == "http") {
-        int port;
-        if (!url.getPort(&port))
-            port = 80;
-        httplib::Client cli(url.host_, port);
-        auto res = cli.Get(("/" + url.path_).c_str());
-        if (res && res->status == 200 && !res->body.empty()) {
-            Buffer buf;
-            buf.assign(reinterpret_cast<uint8_t*>(&res->body[0]), res->body.size());
-            return buf;
-        }
-    }
-    return Buffer();
-}
-
 int main(int argc, char** argv)
 {
 #ifdef VULKAN_SDK
@@ -105,6 +53,17 @@ int main(int argc, char** argv)
 #endif
 
     glfwInit();
+
+    /*
+    Decoder decoder(Decoder::Format_Auto);
+    auto webp = decoder.decode("/Users/jhanssen/Downloads/1.webp");
+    printf("got webp %u %u\n", webp.width, webp.height);
+    auto png = decoder.decode("/Users/jhanssen/Downloads/pngquant2.png");
+    printf("got png %u %u\n", png.width, png.height);
+    */
+
+    auto data = Fetch::fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png");
+    printf("got data %zu\n", data.size());
 
     return 0;
 }
