@@ -1,4 +1,5 @@
 #include "Decoder.h"
+#include "Fetch.h"
 #include <webp/decode.h>
 #include <png.h>
 #include <assert.h>
@@ -14,21 +15,21 @@ static inline Decoder::Format guessFormat(Decoder::Format from, const Buffer& da
     return Decoder::Format_Invalid;
 }
 
-static inline Decoder::Image decodePNG(const Buffer& data)
+static inline std::shared_ptr<Image> decodePNG(const Buffer& data)
 {
     auto png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!png_ptr) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
     auto info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
 
-    Decoder::Image img;
+    auto img = std::make_shared<Image>();
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
     struct PngData {
         const Buffer& data;
@@ -44,77 +45,87 @@ static inline Decoder::Image decodePNG(const Buffer& data)
     png_set_sig_bytes(png_ptr, 0);
     png_read_info(png_ptr, info_ptr);
 
-    img.width = png_get_image_width(png_ptr, info_ptr);
-    img.height = png_get_image_height(png_ptr, info_ptr);
-    img.depth = png_get_bit_depth(png_ptr, info_ptr);
+    img->width = png_get_image_width(png_ptr, info_ptr);
+    img->height = png_get_image_height(png_ptr, info_ptr);
+    img->depth = png_get_bit_depth(png_ptr, info_ptr);
     switch (png_get_color_type(png_ptr, info_ptr)) {
     case 4:
     case 6:
-        img.alpha = true;
+        img->alpha = true;
         break;
     default:
-        img.alpha = false;
+        img->alpha = false;
         break;
     }
 
     png_read_update_info(png_ptr, info_ptr);
     if (setjmp(png_jmpbuf(png_ptr))) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
 
     const auto rowBytes = png_get_rowbytes(png_ptr, info_ptr);
-    png_bytep* row_pointers = static_cast<png_bytep*>(png_malloc(png_ptr, img.height * sizeof(png_bytep)));
-    for (int y = 0; y < img.height; ++y)
+    png_bytep* row_pointers = static_cast<png_bytep*>(png_malloc(png_ptr, img->height * sizeof(png_bytep)));
+    for (int y = 0; y < img->height; ++y)
         row_pointers[y] = static_cast<png_bytep>(png_malloc(png_ptr, rowBytes));
 
     png_read_image(png_ptr, row_pointers);
 
-    for (int y = 0; y < img.height; ++y)
-        img.data.append(row_pointers[y], rowBytes);
+    for (int y = 0; y < img->height; ++y)
+        img->data.append(row_pointers[y], rowBytes);
 
     png_read_end(png_ptr, info_ptr);
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
 
-    img.bpl = rowBytes;
+    img->bpl = rowBytes;
 
     return img;
 }
 
-static inline Decoder::Image decodeWEBP(const Buffer& data)
+static inline std::shared_ptr<Image> decodeWEBP(const Buffer& data)
 {
     WebPBitstreamFeatures features;
     if (WebPGetFeatures(data.data(), data.size(), &features) != VP8_STATUS_OK) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
-    Decoder::Image img;
-    img.width = img.bpl = features.width;
-    img.height = features.height;
-    img.alpha = features.has_alpha;
-    img.depth = 32;
+    auto img = std::make_shared<Image>();
+    img->width = img->bpl = features.width;
+    img->height = features.height;
+    img->alpha = features.has_alpha;
+    img->depth = 32;
 
-    img.data.resize(img.width * img.height * 4);
-    auto out = WebPDecodeRGBAInto(data.data(), data.size(), img.data.data(), img.data.size(), img.width * 4);
+    img->data.resize(img->width * img->height * 4);
+    auto out = WebPDecodeRGBAInto(data.data(), data.size(), img->data.data(), img->data.size(), img->width * 4);
     if (out == nullptr) {
-        return Decoder::Image();
+        return std::shared_ptr<Image>();
     }
 
     return img;
 }
 
-Decoder::Image Decoder::decode(const std::string& path) const
+std::shared_ptr<Image> Decoder::decode(const std::string& path)
 {
-    const Buffer data = Buffer::readFile(path);
+    // first, check if this path is in the cache
+    const auto it = mCache.find(path);
+    if (it != mCache.end()) {
+        return it->second;
+    }
+
+    const Buffer data = Fetch::fetch(path);
     if (data.empty())
-        return Image();
+        return std::shared_ptr<Image>();
     const auto format = guessFormat(mFormat, data);
     assert(format != Format_Auto);
     switch (format) {
-    case Format_PNG:
-        return decodePNG(data);
-    case Format_WEBP:
-        return decodeWEBP(data);
+    case Format_PNG: {
+        auto img = decodePNG(data);
+        mCache.insert(std::make_pair(path, img));
+        return img; }
+    case Format_WEBP: {
+        auto img = decodeWEBP(data);
+        mCache.insert(std::make_pair(path, img));
+        return img; }
     default:
         break;
     }
-    return Image();
+    return std::shared_ptr<Image>();
 }

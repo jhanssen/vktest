@@ -18,8 +18,7 @@
 #include <cstring>
 #include <unordered_set>
 
-#include "Decoder.h"
-#include "Fetch.h"
+#include "Scene.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -44,6 +43,11 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 int main(int argc, char** argv)
 {
+    if (argc < 2) {
+        printf("Needs a json argument\n");
+        return 1;
+    }
+
 #ifdef VULKAN_SDK
 #ifdef __APPLE__
     if (!getenv("VK_ICD_FILENAMES")) {
@@ -62,8 +66,7 @@ int main(int argc, char** argv)
     printf("got png %u %u\n", png.width, png.height);
     */
 
-    auto data = Fetch::fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png");
-    printf("got data %zu\n", data.size());
+    Scene scene = Scene::sceneFromJSON(argv[1]);
 
     return 0;
 }
