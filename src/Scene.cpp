@@ -6,7 +6,7 @@
 
 using json = nlohmann::json;
 
-static void buildRect(Rect& rect, const json& obj)
+static inline void buildRect(Rect& rect, const json& obj)
 {
     for (auto& [key, value] : obj.items()) {
         if (key == "x" && value.is_number()) {
@@ -21,7 +21,7 @@ static void buildRect(Rect& rect, const json& obj)
     }
 }
 
-static void buildColor(Color& rect, const json& obj)
+static inline void buildColor(Color& rect, const json& obj)
 {
     for (auto& [key, value] : obj.items()) {
         if (key == "r" && value.is_number()) {
@@ -36,7 +36,7 @@ static void buildColor(Color& rect, const json& obj)
     }
 }
 
-static void buildImage(Scene::ImageData& image, const json& obj, Decoder& decoder)
+static inline void buildImage(Scene::ImageData& image, const json& obj, Decoder& decoder)
 {
     for (auto& [key, value] : obj.items()) {
         if (key == "sourceRect" && value.is_object()) {
@@ -47,7 +47,7 @@ static void buildImage(Scene::ImageData& image, const json& obj, Decoder& decode
     }
 }
 
-static void buildText(Scene::Item& item, const json& obj)
+static inline void buildText(Scene::Item& item, const json& obj)
 {
     for (auto& [key, value] : obj.items()) {
         if (key == "color" && value.is_object()) {
