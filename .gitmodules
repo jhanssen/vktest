@@ -22,3 +22,6 @@
 [submodule "3rdparty/LUrlParser"]
 	path = 3rdparty/LUrlParser
 	url = https://github.com/corporateshark/LUrlParser.git
+[submodule "3rdparty/libjpeg-turbo"]
+	path = 3rdparty/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git

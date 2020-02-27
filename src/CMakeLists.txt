@@ -27,10 +27,12 @@ include_directories(${THIRDPARTY_BINARY_DIR}/libpng)
 
 include_directories(${THIRDPARTY_DIR}/LUrlParser)
 
+include_directories(${THIRDPARTY_DIR}/libjpeg-turbo)
+
 add_library(LUrlParser STATIC ${THIRDPARTY_DIR}/LUrlParser/LUrlParser.cpp)
 
 find_package(OpenSSL REQUIRED)
 
 find_package(Vulkan REQUIRED)
-target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder LUrlParser OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder turbojpeg-static LUrlParser OpenSSL::SSL OpenSSL::Crypto)
 add_definitions(-DVULKAN_SDK=${VULKAN_SDK} -DCPPHTTPLIB_OPENSSL_SUPPORT)

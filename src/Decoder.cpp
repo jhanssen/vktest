@@ -2,6 +2,7 @@
 #include "Fetch.h"
 #include <webp/decode.h>
 #include <png.h>
+#include <turbojpeg.h>
 #include <assert.h>
 
 static inline Decoder::Format guessFormat(Decoder::Format from, const Buffer& data)
@@ -10,6 +11,8 @@ static inline Decoder::Format guessFormat(Decoder::Format from, const Buffer& da
         return from;
     if (data.size() >= 4 && memcmp(data.data(), "\211PNG", 4) == 0)
         return Decoder::Format_PNG;
+    if (data.size() >= 10 && memcmp(data.data() + 6, "JFIF", 4) == 0)
+        return Decoder::Format_JPEG;
     if (data.size() >= 16 && memcmp(data.data() + 8, "WEBPVP8", 7) == 0)
         return Decoder::Format_WEBP;
     return Decoder::Format_Invalid;
@@ -88,7 +91,8 @@ static inline std::shared_ptr<Image> decodeWEBP(const Buffer& data)
         return std::shared_ptr<Image>();
     }
     auto img = std::make_shared<Image>();
-    img->width = img->bpl = features.width;
+    img->width = features.width;
+    img->bpl = features.width * 4;
     img->height = features.height;
     img->alpha = features.has_alpha;
     img->depth = 32;
@@ -98,6 +102,29 @@ static inline std::shared_ptr<Image> decodeWEBP(const Buffer& data)
     if (out == nullptr) {
         return std::shared_ptr<Image>();
     }
+
+    return img;
+}
+
+static inline std::shared_ptr<Image> decodeJPEG(const Buffer& data)
+{
+    auto handle = tjInitDecompress();
+    int jpegSubsamp, width, height;
+    auto bytes = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data.data()));
+    tjDecompressHeader2(handle, bytes, data.size(), &width, &height, &jpegSubsamp);
+
+    auto img = std::make_shared<Image>();
+    img->width = width;
+    img->bpl = width * 4;
+    img->height = height;
+    img->alpha = false;
+    img->depth = 32;
+
+    img->data.resize(width * height * 4);
+
+    tjDecompress2(handle, bytes, data.size(), img->data.data(), width, 0, height, TJPF_RGBA, TJFLAG_FASTDCT);
+
+    tjDestroy(handle);
 
     return img;
 }
@@ -122,6 +149,10 @@ std::shared_ptr<Image> Decoder::decode(const std::string& path)
         return img; }
     case Format_WEBP: {
         auto img = decodeWEBP(data);
+        mCache.insert(std::make_pair(path, img));
+        return img; }
+    case Format_JPEG: {
+        auto img = decodeJPEG(data);
         mCache.insert(std::make_pair(path, img));
         return img; }
     default:

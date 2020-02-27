@@ -6,6 +6,9 @@ set(JSON_Install OFF)
 set(PNG_TESTS OFF)
 set(PNG_SHARED OFF)
 
+set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
+set(CMAKE_INSTALL_DOCDIR "share/doc")
+
 execute_process(
     COMMAND ./utils/git-sync-deps
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/shaderc
@@ -18,3 +21,4 @@ add_subdirectory(shaderc)
 add_subdirectory(json)
 add_subdirectory(libpng)
 add_subdirectory(libwebp)
+add_subdirectory(libjpeg-turbo)
