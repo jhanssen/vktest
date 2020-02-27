@@ -19,3 +19,6 @@
 [submodule "3rdparty/cpp-httplib"]
 	path = 3rdparty/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "3rdparty/LUrlParser"]
+	path = 3rdparty/LUrlParser
+	url = https://github.com/corporateshark/LUrlParser.git

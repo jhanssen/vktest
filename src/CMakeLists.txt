@@ -23,6 +23,12 @@ include_directories(${THIRDPARTY_DIR}/libwebp/src)
 include_directories(${THIRDPARTY_DIR}/libpng)
 include_directories(${THIRDPARTY_BINARY_DIR}/libpng)
 
+include_directories(${THIRDPARTY_DIR}/LUrlParser)
+
+add_library(LUrlParser STATIC ${THIRDPARTY_DIR}/LUrlParser/LUrlParser.cpp)
+
+find_package(OpenSSL REQUIRED)
+
 find_package(Vulkan REQUIRED)
-target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder)
-add_definitions(-DVULKAN_SDK=${VULKAN_SDK})
+target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder LUrlParser OpenSSL::SSL OpenSSL::Crypto)
+add_definitions(-DVULKAN_SDK=${VULKAN_SDK} -DCPPHTTPLIB_OPENSSL_SUPPORT)
