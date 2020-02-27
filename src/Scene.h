@@ -27,10 +27,10 @@ public:
         Text text;
 
         ImageData image, backgroundImage;
-        std::vector<Item> children;
+        std::vector<std::shared_ptr<Item> > children;
     };
 
-    Item root;
+    std::shared_ptr<Item> root;
 
     static Scene sceneFromJSON(const std::string& path);
 };

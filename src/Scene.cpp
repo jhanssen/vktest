@@ -89,11 +89,11 @@ static void build(Scene::Item& item, const json& obj, Decoder& decoder)
         } else if (key == "text" && value.is_object()) {
             buildText(item, value);
         } else if (key == "children" && value.is_array()) {
-            item.children.resize(value.size());
-            uint32_t idx = 0;
+            item.children.reserve(value.size());
             for (auto& child : value) {
                 assert(child.is_object());
-                build(item.children[idx++], child, decoder);
+                item.children.push_back(std::make_shared<Scene::Item>());
+                build(*item.children.back().get(), child, decoder);
             }
         }
     }
@@ -110,8 +110,10 @@ Scene Scene::sceneFromJSON(const std::string& path)
         }
 
         Scene scene;
+        scene.root = std::make_shared<Scene::Item>();
+
         Decoder decoder(Decoder::Format_Auto);
-        build(scene.root, data, decoder);
+        build(*scene.root.get(), data, decoder);
         return scene;
     } catch (const json::parse_error& error) {
         printf("json parse error\n");
