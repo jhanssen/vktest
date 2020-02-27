@@ -18,7 +18,7 @@
 #include <cstring>
 #include <unordered_set>
 
-#include "Scene.h"
+#include "scene/Scene.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)

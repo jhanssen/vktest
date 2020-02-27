@@ -10,7 +10,7 @@ set(SOURCES
     Buffer.cpp
     Decoder.cpp
     Fetch.cpp
-    Scene.cpp
+    scene/Scene.cpp
     )
 
 add_executable(vk ${SOURCES})
