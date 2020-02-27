@@ -1,6 +1,4 @@
-#include <vulkan/vulkan.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "Window.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -18,7 +16,10 @@
 #include <cstring>
 #include <unordered_set>
 
+#include <functional>
+
 #include "scene/Scene.h"
+#include "render/Render.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -39,7 +40,6 @@ bool enableValidationLayers = true;
 
 const int WIDTH = 1280;
 const int HEIGHT = 720;
-const int MAX_FRAMES_IN_FLIGHT = 2;
 
 int main(int argc, char** argv)
 {
@@ -67,6 +67,12 @@ int main(int argc, char** argv)
     */
 
     Scene scene = Scene::sceneFromJSON(argv[1]);
+    Window win(WIDTH, HEIGHT);
+
+    Render render(scene, win);
+
+    win.registerRender(std::bind(&Render::render, &render, std::placeholders::_1));
+    win.exec();
 
     return 0;
 }

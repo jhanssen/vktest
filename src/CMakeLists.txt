@@ -10,6 +10,8 @@ set(SOURCES
     Buffer.cpp
     Decoder.cpp
     Fetch.cpp
+    Window.cpp
+    render/Render.cpp
     scene/Scene.cpp
     )
 
