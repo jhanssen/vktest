@@ -6,10 +6,11 @@
 
 struct Image
 {
-    uint32_t width, height;
-    uint32_t bpl;
-    uint8_t depth;
-    bool alpha;
+    uint32_t width { 0 };
+    uint32_t height { 0 };
+    uint32_t bpl { 0 };
+    uint8_t depth { 0 };
+    bool alpha { false };
     Buffer data;
 };
 

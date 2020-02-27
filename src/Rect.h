@@ -6,8 +6,10 @@
 class Rect
 {
 public:
-    int32_t x, y;
-    uint32_t width, height;
+    int32_t x { 0 };
+    int32_t y { 0 };
+    uint32_t width { 0 };
+    uint32_t height { 0 };
 };
 
 #endif // RECT_H

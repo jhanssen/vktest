@@ -4,7 +4,10 @@
 class Color
 {
 public:
-    float r, g, b, a;
+    float r { 0.f };
+    float g { 0.f };
+    float b { 0.f };
+    float a { 0.f };
 };
 
 #endif // COLOR_H

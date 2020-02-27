@@ -9,9 +9,10 @@ class Text
 {
 public:
     std::string contents;
-    uint32_t size;
     Color color;
-    bool bold, italic;
+    uint32_t size { 0 };
+    bool bold { false };
+    bool italic { false };
 };
 
 #endif // TEXT_H
