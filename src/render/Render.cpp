@@ -19,18 +19,18 @@ struct Render::RenderColor : public Render::Node::Drawable
 public:
     virtual void update(const vk::UniqueDevice& device, uint32_t currentImage);
 
-    bool changed { true };
+    std::vector<bool> changed;
     RenderColorData data;
 };
 
 void Render::RenderColor::update(const vk::UniqueDevice& device, uint32_t currentImage)
 {
-    if (!changed)
+    if (!changed[currentImage])
         return;
     void* out = device->mapMemory(**ubosMemory[currentImage], 0, sizeof(data), {});
     memcpy(out, &data, sizeof(data));
     device->unmapMemory(**ubosMemory[currentImage]);
-    changed = false;
+    changed[currentImage] = false;
 }
 
 static vk::UniqueShaderModule createShaderModule(const vk::UniqueDevice& device, const Buffer& buffer)
@@ -305,6 +305,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& c
     const auto& drawableData = mDrawableData[DrawableColor];
 
     auto colorDrawable = std::make_shared<RenderColor>();
+    colorDrawable->changed = std::vector<bool>(mWindow.swapChainFramebuffers().size(), true);
     colorDrawable->pipeline = drawableData.pipeline;
     colorDrawable->commandBuffers = drawableData.commandBuffers;
     colorDrawable->ubosMemory = drawableData.ubosMemory;
