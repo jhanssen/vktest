@@ -8,6 +8,8 @@ public:
     float g { 0.f };
     float b { 0.f };
     float a { 0.f };
+
+    bool isValid() const { return a != 0.f; }
 };
 
 #endif // COLOR_H

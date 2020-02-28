@@ -6,10 +6,12 @@
 class Rect
 {
 public:
-    int32_t x { 0 };
-    int32_t y { 0 };
-    uint32_t width { 0 };
-    uint32_t height { 0 };
+    float x { 0.f };
+    float y { 0.f };
+    float width { 0.f };
+    float height { 0.f };
+
+    bool isValid() const { return width > 0.f && height > 0.f; }
 };
 
 #endif // RECT_H
