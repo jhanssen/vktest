@@ -228,7 +228,7 @@ void Render::render(const Window::RenderData& data)
     vk::Semaphore signalSemaphores[] = { data.signal };
     vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
 
-    const auto& commandBuffer = mCommandBuffers[data.currentFrame];
+    const auto& commandBuffer = mCommandBuffers[data.imageIndex];
     const auto& graphicsQueue = mWindow.graphicsQueue();
     vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &*commandBuffer, 1, signalSemaphores);
 
