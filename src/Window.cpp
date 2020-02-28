@@ -206,10 +206,12 @@ Window::Window(uint32_t width, uint32_t height)
         glfwDestroyWindow(w);
     });
 
+#ifndef NDEBUG
     if (enableValidationLayers && !checkValidationLayerSupport()) {
         printf("wanted validation layers but none available\n");
         enableValidationLayers = false;
     }
+#endif
 
     auto getRequiredExtensions = [&]() -> std::vector<const char*> {
         uint32_t glfwExtensionCount = 0;
@@ -471,30 +473,6 @@ void Window::exec()
             inFlightFences[currentFrame],
         };
         mRender(renderData);
-
-        /*
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
-
-        VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
-
-        if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to submit draw command buffer!");
-        }
-        */
 
         vk::PresentInfoKHR presentInfo(1, &renderFinishedSemaphores[currentFrame], 1, &*mSwapChain, &imageIndex);
         mPresentQueue.presentKHR(presentInfo);

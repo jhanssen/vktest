@@ -18,7 +18,11 @@ public:
     };
 
 private:
+    const Window& mWindow;
     vk::UniquePipeline mPipeline;
+    vk::UniqueCommandPool mCommandPool;
+    std::vector<vk::UniquePipeline> mGraphicsPipelines;
+    std::vector<vk::UniqueCommandBuffer>  mCommandBuffers;
     VertexBuffer mVertexBuffer;
 };
 

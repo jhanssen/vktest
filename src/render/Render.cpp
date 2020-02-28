@@ -89,13 +89,14 @@ struct Vertex
     {
         std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions = {
             vk::VertexInputAttributeDescription { 0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos) },
-            vk::VertexInputAttributeDescription { 0, 1, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) }
+            vk::VertexInputAttributeDescription { 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) }
         };
         return attributeDescriptions;
     }
 };
 
 Render::Render(const Scene& scene, const Window& window)
+    : mWindow(window)
 {
     const auto& device = window.device();
     const auto& physicalDevice = window.physicalDevice();
@@ -157,17 +158,19 @@ Render::Render(const Scene& scene, const Window& window)
                                                 &rasterizer, &multisampling, nullptr, &colorBlending, nullptr, *pipelineLayout,
                                                 *renderPass, 0, {}, -1);
 
-    std::vector<vk::UniquePipeline> graphicsPipelines = device->createGraphicsPipelinesUnique({}, { pipelineInfo });
-    if (graphicsPipelines.empty() || !graphicsPipelines[0]) {
+    mGraphicsPipelines = device->createGraphicsPipelinesUnique({}, { pipelineInfo });
+    if (mGraphicsPipelines.empty() || !mGraphicsPipelines[0]) {
         printf("failed to create graphics pipeline!\n");
     }
+
+    const auto& graphicsPipeline = mGraphicsPipelines[0];
 
     const uint32_t graphicsFamily = window.graphicsFamily();
     const auto& graphicsQueue = window.graphicsQueue();
 
     vk::CommandPoolCreateInfo poolInfo({}, graphicsFamily);
-    vk::UniqueCommandPool commandPool = device->createCommandPoolUnique(poolInfo);
-    if (!commandPool) {
+    mCommandPool = device->createCommandPoolUnique(poolInfo);
+    if (!mCommandPool) {
         printf("failed to create command pool!\n");
         return;
     }
@@ -191,49 +194,46 @@ Render::Render(const Scene& scene, const Window& window)
                                  vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
                                  vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    copyBuffer(*device, *commandPool, graphicsQueue, *stagingBuffer.buffer, *mVertexBuffer.buffer, bufferSize);
+    copyBuffer(*device, *mCommandPool, graphicsQueue, *stagingBuffer.buffer, *mVertexBuffer.buffer, bufferSize);
 
     const auto& swapChainFramebuffers = window.swapChainFramebuffers();
 
-    vk::CommandBufferAllocateInfo allocCommandBufferInfo(*commandPool, vk::CommandBufferLevel::ePrimary, swapChainFramebuffers.size());
-    const std::vector<vk::UniqueCommandBuffer> commandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
-    if (commandBuffers.empty()) {
+    vk::CommandBufferAllocateInfo allocCommandBufferInfo(*mCommandPool, vk::CommandBufferLevel::ePrimary, swapChainFramebuffers.size());
+    mCommandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
+    if (mCommandBuffers.empty()) {
         printf("failed to allocate command buffers!\n");
         return;
     }
 
-    for (size_t i = 0; i < commandBuffers.size(); i++) {
+    for (size_t i = 0; i < mCommandBuffers.size(); i++) {
         vk::CommandBufferBeginInfo beginInfo;
-        commandBuffers[i]->begin(beginInfo);
+        mCommandBuffers[i]->begin(beginInfo);
 
         vk::ClearValue clearValue = vk::ClearColorValue(std::array<float,4> { 0.0f, 0.0f, 0.0f, 1.0f });
-        std::array<float,4> helvete = { 0.0f, 0.0f, 0.0f, 1.0f };
-        vk::ClearColorValue faen(helvete);
         vk::RenderPassBeginInfo renderPassInfo(*renderPass, swapChainFramebuffers[i], { { 0, 0 }, extent }, 1, &clearValue);
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = renderPass;
-        renderPassInfo.framebuffer = swapChainFramebuffers[i];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
 
-        VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
-        renderPassInfo.clearValueCount = 1;
-        renderPassInfo.pClearValues = &clearColor;
+        mCommandBuffers[i]->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+        mCommandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+        mCommandBuffers[i]->bindVertexBuffers(0, { *mVertexBuffer.buffer }, { 0 });
+        mCommandBuffers[i]->draw(3, 1, 0, 0);
 
-        vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-        VkBuffer vertexBuffers[] = {vertexBuffer};
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-        vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
-        vkCmdEndRenderPass(commandBuffers[i]);
-        if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
-            printf("failed to record command buffer!\n");
-            exit(1);
-        }
+        mCommandBuffers[i]->end();
     }
 }
 
 void Render::render(const Window::RenderData& data)
 {
+    vk::Semaphore waitSemaphores[] = { data.wait };
+    vk::Semaphore signalSemaphores[] = { data.signal };
+    vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+    const auto& commandBuffer = mCommandBuffers[data.currentFrame];
+    const auto& graphicsQueue = mWindow.graphicsQueue();
+    vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &*commandBuffer, 1, signalSemaphores);
+
+    try {
+        graphicsQueue.submit({ submitInfo }, data.fence);
+    } catch (const vk::Error& error) {
+        printf("failed to submit draw command buffer\n");
+    }
 }
