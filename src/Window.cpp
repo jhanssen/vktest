@@ -294,6 +294,9 @@ Window::Window(uint32_t width, uint32_t height)
 
     QueueFamilyIndices indices = findQueueFamilies(mPhysicalDevice, mSurface);
 
+    mPresentFamily = indices.presentFamily.value();
+    mGraphicsFamily = indices.graphicsFamily.value();
+
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
     std::unordered_set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 

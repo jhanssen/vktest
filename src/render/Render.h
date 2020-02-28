@@ -11,8 +11,15 @@ public:
 
     void render(const Window::RenderData& data);
 
+    struct VertexBuffer
+    {
+        vk::UniqueBuffer buffer;
+        vk::UniqueDeviceMemory memory;
+    };
+
 private:
     vk::UniquePipeline mPipeline;
+    VertexBuffer mVertexBuffer;
 };
 
 #endif

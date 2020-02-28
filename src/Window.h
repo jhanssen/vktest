@@ -28,6 +28,8 @@ public:
     const std::vector<vk::ImageView>& swapChainImageViews() const { return mSwapChainImageViews; }
     const std::vector<vk::Framebuffer>& swapChainFramebuffers() const { return mSwapChainFramebuffers; }
     const vk::UniqueRenderPass& renderPass() const { return mRenderPass; }
+    uint32_t presentFamily() const { return mPresentFamily; }
+    uint32_t graphicsFamily() const { return mGraphicsFamily; }
     const std::shared_ptr<GLFWwindow>& window() const { return mWindow; }
 
     struct RenderData
@@ -57,6 +59,7 @@ private:
     std::vector<vk::ImageView> mSwapChainImageViews;
     vk::UniqueRenderPass mRenderPass;
     std::vector<vk::Framebuffer> mSwapChainFramebuffers;
+    uint32_t mPresentFamily, mGraphicsFamily;
     std::shared_ptr<GLFWwindow> mWindow;
 
     std::function<void(const RenderData&)> mRender;
