@@ -393,7 +393,7 @@ Window::Window(uint32_t width, uint32_t height)
                                               vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
                                               vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR);
     vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
-    vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, 1, &colorAttachmentRef);
+    vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &colorAttachmentRef);
 
     vk::RenderPassCreateInfo renderPassInfo({}, 1, &colorAttachment, 1, &subpass);
 
