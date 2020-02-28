@@ -181,7 +181,7 @@ Render::Render(const Scene& scene, const Window& window)
         {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
     };
 
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
     const auto stagingBuffer = createBuffer(physicalDevice, *device, bufferSize,
                                             vk::BufferUsageFlagBits::eTransferSrc,
                                             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -216,6 +216,7 @@ Render::Render(const Scene& scene, const Window& window)
         mCommandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
         mCommandBuffers[i]->bindVertexBuffers(0, { *mVertexBuffer.buffer }, { 0 });
         mCommandBuffers[i]->draw(3, 1, 0, 0);
+        mCommandBuffers[i]->endRenderPass();
 
         mCommandBuffers[i]->end();
     }
