@@ -120,7 +120,8 @@ Render::Render(const Scene& scene, const Window& window)
     const auto& swapChainFramebuffers = window.swapChainFramebuffers();
 
     vk::DescriptorPoolSize descriptorPoolSize(vk::DescriptorType::eUniformBuffer, swapChainFramebuffers.size());
-    vk::DescriptorPoolCreateInfo descriptorPoolInfo({}, swapChainFramebuffers.size(), 1, &descriptorPoolSize);
+    // enough for 1000 'widgets'
+    vk::DescriptorPoolCreateInfo descriptorPoolInfo({}, swapChainFramebuffers.size() * 1000, 1, &descriptorPoolSize);
     mDescriptorPool = device->createDescriptorPoolUnique(descriptorPoolInfo);
     if (!mDescriptorPool) {
         printf("failed to create descriptor pool\n");
@@ -157,7 +158,7 @@ std::shared_ptr<Render::PipelineResult> Render::makePipeline(const PipelineData&
         vertexInputInfo = vk::PipelineVertexInputStateCreateInfo({}, 1, &bindingDescription, static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
     }
 
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleStrip, VK_FALSE);
 
     vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f);
 
@@ -231,65 +232,6 @@ void Render::makeColorDrawableData()
     auto pipeline = makePipeline(createData);
     drawableData.pipeline = pipeline;
 
-    const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
-    const auto& device = mWindow.device();
-    const auto& physicalDevice = mWindow.physicalDevice();
-
-    // make ubos
-    vk::DeviceSize colorSize = sizeof(RenderColorData);
-    drawableData.ubos.reserve(swapChainFramebuffers.size());
-    drawableData.ubosMemory.reserve(swapChainFramebuffers.size());
-    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
-        auto ubo = createBuffer(physicalDevice, *device, colorSize,
-                                vk::BufferUsageFlagBits::eUniformBuffer,
-                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        drawableData.ubos.push_back(std::make_shared<vk::UniqueBuffer>(std::move(ubo.buffer)));
-        drawableData.ubosMemory.push_back(std::make_shared<vk::UniqueDeviceMemory>(std::move(ubo.memory)));
-    }
-
-    // allocate descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(swapChainFramebuffers.size(), *pipeline->descriptorSetLayout);
-    vk::DescriptorSetAllocateInfo allocInfo(*mDescriptorPool, swapChainFramebuffers.size(), layouts.data());
-    auto sets = device->allocateDescriptorSetsUnique(allocInfo);
-    drawableData.descriptorSets.reserve(swapChainFramebuffers.size());
-    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
-        vk::DescriptorBufferInfo bufferInfo(**drawableData.ubos[i], 0, sizeof(RenderColorData));
-        vk::WriteDescriptorSet descriptorWrite(*sets[i], 0, 0, 1, vk::DescriptorType::eUniformBuffer, {}, &bufferInfo);
-        device->updateDescriptorSets({ descriptorWrite }, {});
-
-        drawableData.descriptorSets.push_back(std::make_shared<vk::UniqueDescriptorSet>(std::move(sets[i])));
-    }
-
-    // make command buffers
-    const auto& extent = mWindow.extent();
-    const auto& renderPass = mWindow.renderPass();
-
-    vk::CommandBufferAllocateInfo allocCommandBufferInfo(*mCommandPool, vk::CommandBufferLevel::ePrimary, swapChainFramebuffers.size());
-    auto commandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
-    if (commandBuffers.empty()) {
-        printf("failed to allocate command buffers!\n");
-        return;
-    }
-
-    drawableData.commandBuffers.reserve(swapChainFramebuffers.size());
-    for (size_t i = 0; i < commandBuffers.size(); i++) {
-        vk::CommandBufferBeginInfo beginInfo;
-        commandBuffers[i]->begin(beginInfo);
-
-        vk::ClearValue clearValue = vk::ClearColorValue(std::array<float,4> { 0.0f, 0.0f, 0.0f, 1.0f });
-        vk::RenderPassBeginInfo renderPassInfo(*renderPass, swapChainFramebuffers[i], { { 0, 0 }, extent }, 1, &clearValue);
-
-        commandBuffers[i]->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-        commandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline->pipeline);
-        commandBuffers[i]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline->layout, 0, { **drawableData.descriptorSets[i] }, {});
-        commandBuffers[i]->draw(3, 1, 0, 0);
-        commandBuffers[i]->endRenderPass();
-
-        commandBuffers[i]->end();
-
-        drawableData.commandBuffers.push_back(std::make_shared<vk::UniqueCommandBuffer>(std::move(commandBuffers[i])));
-    }
-
     assert(mDrawableData.size() == DrawableColor);
     mDrawableData.push_back(std::move(drawableData));
 }
@@ -299,21 +241,83 @@ void Render::makeDrawableDatas()
     makeColorDrawableData();
 }
 
+static inline float mix(float coord, float limit, float min, float max)
+{
+    float r = coord / limit;
+    return glm::mix(min, max, r);
+}
+
+static inline float mixScreen(float coord, float limit)
+{
+    return mix(coord, limit, -1.f, 1.f);
+}
+
 std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& color, const Rect& geom)
 {
     assert(mDrawableData.size() > DrawableColor);
     const auto& drawableData = mDrawableData[DrawableColor];
 
+    const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
+    const auto& device = mWindow.device();
+    const auto& physicalDevice = mWindow.physicalDevice();
+    const auto& pipeline = drawableData.pipeline;
+
     auto colorDrawable = std::make_shared<RenderColor>();
+
+    // make ubos
+    vk::DeviceSize colorSize = sizeof(RenderColorData);
+    colorDrawable->ubos.reserve(swapChainFramebuffers.size());
+    colorDrawable->ubosMemory.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
+        auto ubo = createBuffer(physicalDevice, *device, colorSize,
+                                vk::BufferUsageFlagBits::eUniformBuffer,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        colorDrawable->ubos.push_back(std::make_shared<vk::UniqueBuffer>(std::move(ubo.buffer)));
+        colorDrawable->ubosMemory.push_back(std::make_shared<vk::UniqueDeviceMemory>(std::move(ubo.memory)));
+    }
+
+    // allocate descriptor sets
+    std::vector<vk::DescriptorSetLayout> layouts(swapChainFramebuffers.size(), *pipeline->descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo(*mDescriptorPool, swapChainFramebuffers.size(), layouts.data());
+    auto sets = device->allocateDescriptorSetsUnique(allocInfo);
+    colorDrawable->descriptorSets.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
+        vk::DescriptorBufferInfo bufferInfo(**colorDrawable->ubos[i], 0, sizeof(RenderColorData));
+        vk::WriteDescriptorSet descriptorWrite(*sets[i], 0, 0, 1, vk::DescriptorType::eUniformBuffer, {}, &bufferInfo);
+        device->updateDescriptorSets({ descriptorWrite }, {});
+
+        colorDrawable->descriptorSets.push_back(std::make_shared<vk::UniqueDescriptorSet>(std::move(sets[i])));
+    }
+
+    vk::CommandBufferAllocateInfo allocCommandBufferInfo(*mCommandPool, vk::CommandBufferLevel::eSecondary, swapChainFramebuffers.size());
+    auto commandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
+    if (commandBuffers.empty()) {
+        printf("failed to allocate command buffers!\n");
+        std::shared_ptr<Render::Node::Drawable>();
+    }
+
+    colorDrawable->commandBuffers.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < commandBuffers.size(); i++) {
+        vk::CommandBufferBeginInfo beginInfo;
+        commandBuffers[i]->begin(beginInfo);
+
+        commandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline->pipeline);
+        commandBuffers[i]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline->layout, 0, { **colorDrawable->descriptorSets[i] }, {});
+        commandBuffers[i]->draw(4, 1, 0, 0);
+
+        commandBuffers[i]->end();
+
+        colorDrawable->commandBuffers.push_back(std::make_shared<vk::UniqueCommandBuffer>(std::move(commandBuffers[i])));
+    }
+
     colorDrawable->changed = std::vector<bool>(mWindow.swapChainFramebuffers().size(), true);
-    colorDrawable->pipeline = drawableData.pipeline;
-    colorDrawable->commandBuffers = drawableData.commandBuffers;
-    colorDrawable->ubosMemory = drawableData.ubosMemory;
-    colorDrawable->ubos = drawableData.ubos;
-    colorDrawable->descriptorSets = drawableData.descriptorSets;
+
+    const float width = static_cast<float>(mWindow.width());
+    const float height = static_cast<float>(mWindow.height());
 
     colorDrawable->data.color = { color.r, color.g, color.b, color.a };
-    colorDrawable->data.geometry = { geom.x, geom.y, geom.x + geom.width, geom.y + geom.height };
+    colorDrawable->data.geometry = { mixScreen(geom.x, width), mixScreen(geom.y, height), mixScreen(geom.x + geom.width, width), mixScreen(geom.y + geom.height, height) };
+    //printf("ball %f %f %f %f\n", colorDrawable->data.geometry[0], colorDrawable->data.geometry[1], colorDrawable->data.geometry[2], colorDrawable->data.geometry[3]);
 
     return colorDrawable;
 }
@@ -346,6 +350,9 @@ void Render::makeRenderTree(const Scene& scene)
 
 void Render::renderNode(const std::shared_ptr<Node>& node, const vk::UniqueCommandBuffer& commandBuffer, uint32_t imageIndex)
 {
+    if (!node)
+        return;
+
     for (const auto& drawable : node->drawables) {
         drawable->update(mWindow.device(), imageIndex);
         commandBuffer->executeCommands({ **drawable->commandBuffers[imageIndex] });
@@ -359,6 +366,9 @@ void Render::renderNode(const std::shared_ptr<Node>& node, const vk::UniqueComma
 void Render::render(const Window::RenderData& data)
 {
     const auto& device = mWindow.device();
+    const auto& extent = mWindow.extent();
+    const auto& renderPass = mWindow.renderPass();
+    const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
 
     vk::CommandBufferAllocateInfo allocCommandBufferInfo(*mCommandPool, vk::CommandBufferLevel::ePrimary, 1);
     auto commandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
@@ -370,7 +380,15 @@ void Render::render(const Window::RenderData& data)
     const auto& commandBuffer = commandBuffers[0];
     vk::CommandBufferBeginInfo beginInfo;
     commandBuffer->begin(beginInfo);
+
+    vk::ClearValue clearValue = vk::ClearColorValue(std::array<float,4> { 0.0f, 0.0f, 0.0f, 1.0f });
+    vk::RenderPassBeginInfo renderPassInfo(*renderPass, swapChainFramebuffers[data.imageIndex], { { 0, 0 }, extent }, 1, &clearValue);
+
+    commandBuffer->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
     renderNode(mRoot, commandBuffer, data.imageIndex);
+
+    commandBuffer->endRenderPass();
     commandBuffer->end();
 
     vk::Semaphore waitSemaphores[] = { data.wait };

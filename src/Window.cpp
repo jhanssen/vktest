@@ -199,6 +199,7 @@ static void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEX
 }
 
 Window::Window(uint32_t width, uint32_t height)
+    : mWidth(width), mHeight(height)
 {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(width, height, "Vulkan window", nullptr, nullptr);

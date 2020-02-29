@@ -15,6 +15,9 @@ public:
 
     void exec();
 
+    uint32_t width() const { return mWidth; }
+    uint32_t height() const { return mHeight; }
+
     // vulkan accessors
     const vk::UniqueInstance& instance() const { return mInstance; }
     const vk::PhysicalDevice& physicalDevice() const { return mPhysicalDevice; }
@@ -47,6 +50,8 @@ public:
     }
 
 private:
+    uint32_t mWidth, mHeight;
+
     vk::UniqueInstance mInstance;
     VkDebugUtilsMessengerEXT mDebugMessenger;
     vk::PhysicalDevice mPhysicalDevice;

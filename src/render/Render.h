@@ -88,11 +88,6 @@ private:
     struct DrawableData
     {
         std::shared_ptr<PipelineResult> pipeline;
-        std::vector<std::shared_ptr<vk::UniqueCommandBuffer> > commandBuffers;
-
-        std::vector<std::shared_ptr<vk::UniqueDeviceMemory> > ubosMemory;
-        std::vector<std::shared_ptr<vk::UniqueBuffer > > ubos;
-        std::vector<std::shared_ptr<vk::UniqueDescriptorSet > > descriptorSets;
     };
     enum DrawableType { DrawableColor };
     std::vector<DrawableData> mDrawableData;

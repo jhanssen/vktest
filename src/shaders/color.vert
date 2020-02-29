@@ -8,19 +8,17 @@ layout(binding = 0) uniform UniformBufferObject {
     vec4 geometry;
 } ubo;
 
-vec2 positions[3] = vec2[](
-    vec2(0.0, -0.5),
-    vec2(0.5, 0.5),
-    vec2(-0.5, 0.5)
-);
-
-vec3 colors[3] = vec3[](
-    vec3(1.0, 0.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(0.0, 0.0, 1.0)
+vec4 positions[4] = vec4[](
+    vec4(-1.0, +1.0,     0.0,  1.0),
+    vec4(+1.0, +1.0,     1.0,  1.0),
+    vec4(-1.0, -1.0,     0.0,  0.0),
+    vec4(+1.0, -1.0,     1.0,  0.0)
 );
 
 void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    vec4 position = positions[gl_VertexIndex];
+    int x = position.x == -1.0 ? 0 : 2;
+    int y = position.y == +1.0 ? 1 : 3;
+    gl_Position = vec4(ubo.geometry[x], ubo.geometry[y], 0.0, 1.0);
     fragColor = ubo.color.rgb;
 }
