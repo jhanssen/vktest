@@ -378,7 +378,7 @@ void Render::render(const Window::RenderData& data)
     }
 
     const auto& commandBuffer = commandBuffers[0];
-    vk::CommandBufferBeginInfo beginInfo;
+    vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
     commandBuffer->begin(beginInfo);
 
     vk::ClearValue clearValue = vk::ClearColorValue(std::array<float,4> { 0.0f, 0.0f, 0.0f, 1.0f });
