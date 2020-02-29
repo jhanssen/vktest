@@ -439,11 +439,11 @@ void Render::transitionImageLayout(const vk::UniqueImage& image, vk::Format form
     endSingleCommand(commandBuffer);
 }
 
-void Render::copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, int32_t width, int32_t height)
+void Render::copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height)
 {
     vk::CommandBuffer commandBuffer = beginSingleCommand();
 
-    vk::BufferImageCopy region({}, 0, 0, { vk::ImageAspectFlagBits::eColor, 0, 0, 1 }, { width, height, 1 });
+    vk::BufferImageCopy region({}, 0, 0, { vk::ImageAspectFlagBits::eColor, 0, 0, 1 }, {}, { width, height, 1 });
     commandBuffer.copyBufferToImage(*buffer, *image, vk::ImageLayout::eTransferDstOptimal, { region });
 
     endSingleCommand(commandBuffer);
@@ -505,9 +505,9 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
         memcpy(data, image.image->data.data(), imageSize);
         device->unmapMemory(*staging.memory);
 
-        transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+        transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
         copyBufferToImage(staging.buffer, textureImage, image.image->width, image.image->height);
-        transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
         vk::ImageViewCreateInfo imageViewCreateInfo({}, *textureImage, vk::ImageViewType::e2D, vkFormat, {},
                                                     { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });

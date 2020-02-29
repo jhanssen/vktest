@@ -91,7 +91,7 @@ private:
     void endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue = true);
 
     void transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-    void copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, int32_t width, int32_t height);
+    void copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height);
 
 private:
     const Window& mWindow;

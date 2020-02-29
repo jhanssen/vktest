@@ -317,9 +317,12 @@ Window::Window(uint32_t width, uint32_t height)
         deviceLayerNames = validationLayers.data();
     }
 
+    vk::PhysicalDeviceFeatures deviceFeatures;
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
     vk::DeviceCreateInfo createDeviceInfo({}, queueCreateInfos.size(), queueCreateInfos.data(),
                                           deviceLayerCount, deviceLayerNames,
-                                          deviceExtensions.size(), deviceExtensions.data());
+                                          deviceExtensions.size(), deviceExtensions.data(),
+                                          &deviceFeatures);
 
     mDevice = mPhysicalDevice.createDeviceUnique(createDeviceInfo);
     if (!mDevice) {
