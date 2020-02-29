@@ -29,6 +29,7 @@ public:
     bool empty() const { return !mSize; }
 
     static Buffer readFile(const std::string& path);
+    void writeFile(const std::string& path);
 
 private:
     uint8_t* mData;

@@ -18,3 +18,12 @@ Buffer Buffer::readFile(const std::string& path)
     fclose(f);
     return buf;
 }
+
+void Buffer::writeFile(const std::string& path)
+{
+    FILE* f = fopen(path.c_str(), "w");
+    if (fwrite(mData, mSize, 1, f) != 1) {
+        printf("failed to write file '%s'\n", path.c_str());
+    }
+    fclose(f);
+}
