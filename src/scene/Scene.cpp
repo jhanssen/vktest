@@ -64,13 +64,21 @@ static inline void buildText(Scene::Item& item, const json& obj)
     }
 }
 
-static void build(Scene::Item& item, const json& obj, Decoder& decoder)
+static void build(Scene::Item& item, const json& obj, Decoder& decoder, Scene::Item* parent)
 {
     for (auto& [key, value] : obj.items()) {
-        if (key == "x" && value.is_number()) {
-            item.geometry.x = value.get<int32_t>();
-        } else if (key == "y" && value.is_number()) {
-            item.geometry.y = value.get<int32_t>();
+        if (key == "x") {
+            if (value.is_number()) {
+                item.geometry.x = value.get<int32_t>();
+            } else if (value.is_null() && parent) {
+                item.geometry.x = parent->geometry.x;
+            }
+        } else if (key == "y") {
+            if (value.is_number()) {
+                item.geometry.y = value.get<int32_t>();
+            } else if (value.is_null() && parent) {
+                item.geometry.y = parent->geometry.y;
+            }
         } else if (key == "width" && value.is_number()) {
             item.geometry.width = value.get<uint32_t>();
         } else if (key == "height" && value.is_number()) {
@@ -93,7 +101,7 @@ static void build(Scene::Item& item, const json& obj, Decoder& decoder)
             for (auto& child : value) {
                 assert(child.is_object());
                 item.children.push_back(std::make_shared<Scene::Item>());
-                build(*item.children.back().get(), child, decoder);
+                build(*item.children.back().get(), child, decoder, &item);
             }
         }
     }
@@ -113,7 +121,7 @@ Scene Scene::sceneFromJSON(const std::string& path)
         scene.root = std::make_shared<Scene::Item>();
 
         Decoder decoder(Decoder::Format_Auto);
-        build(*scene.root.get(), data, decoder);
+        build(*scene.root.get(), data, decoder, nullptr);
         return scene;
     } catch (const json::parse_error& error) {
         printf("json parse error\n");
