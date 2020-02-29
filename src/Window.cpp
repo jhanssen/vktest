@@ -69,7 +69,7 @@ struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
 
-    bool isComplete() {
+    bool isComplete() const {
         return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
@@ -167,7 +167,8 @@ static vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilit
 
 static bool isDeviceSuitable(vk::PhysicalDevice device, const vk::UniqueSurfaceKHR& surface)
 {
-    QueueFamilyIndices indices = findQueueFamilies(device, surface);
+    const vk::PhysicalDeviceFeatures features = device.getFeatures();
+    const QueueFamilyIndices indices = findQueueFamilies(device, surface);
 
     bool swapChainAdequate = false;
     const bool extensionsSupported = checkDeviceExtensionSupport(device);
@@ -177,7 +178,7 @@ static bool isDeviceSuitable(vk::PhysicalDevice device, const vk::UniqueSurfaceK
         swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     }
 
-    return indices.isComplete() && extensionsSupported && swapChainAdequate;
+    return indices.isComplete() && extensionsSupported && swapChainAdequate && features.samplerAnisotropy;
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,

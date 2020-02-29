@@ -54,11 +54,15 @@ private:
 
             // shared data
             std::shared_ptr<PipelineResult> pipeline;
-            std::vector<std::shared_ptr<vk::UniqueCommandBuffer> > commandBuffers;
+            std::vector<vk::UniqueCommandBuffer> commandBuffers;
             //vk::UniqueBuffer vertexBuffer;
-            std::vector<std::shared_ptr<vk::UniqueDeviceMemory> > ubosMemory;
-            std::vector<std::shared_ptr<vk::UniqueBuffer > > ubos;
-            std::vector<std::shared_ptr<vk::UniqueDescriptorSet > > descriptorSets;
+            std::vector<vk::UniqueDeviceMemory> imagesMemory;
+            std::vector<vk::UniqueImage> images;
+            std::vector<vk::UniqueImageView> imageViews;
+            std::vector<vk::UniqueSampler> imageSamplers;
+            std::vector<vk::UniqueDeviceMemory> ubosMemory;
+            std::vector<vk::UniqueBuffer> ubos;
+            std::vector<vk::UniqueDescriptorSet> descriptorSets;
 
             virtual void update(const vk::UniqueDevice& device, uint32_t currentImage) = 0;
         };
@@ -68,17 +72,26 @@ private:
     };
 
     struct RenderColor;
+    struct RenderImage;
 
     void traverseSceneItem(const std::shared_ptr<Scene::Item>& sceneItem,
                            std::shared_ptr<Node>& renderNode);
     void makeRenderTree(const Scene& scene);
 
     void makeColorDrawableData();
+    void makeImageDrawableData();
     void makeDrawableDatas();
 
     std::shared_ptr<Node::Drawable> makeColorDrawable(const Color& color, const Rect& geometry);
+    std::shared_ptr<Node::Drawable> makeImageDrawable(const Scene::ImageData& image, const Rect& geometry);
 
-    void renderNode(const std::shared_ptr<Node>& node, const vk::UniqueCommandBuffer& commandBuffer, uint32_t imageIndex);
+    void renderNode(const std::shared_ptr<Node>& node, const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
+
+    vk::CommandBuffer beginSingleCommand();
+    void endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue = true);
+
+    void transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+    void copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, int32_t width, int32_t height);
 
 private:
     const Window& mWindow;
@@ -89,7 +102,7 @@ private:
     {
         std::shared_ptr<PipelineResult> pipeline;
     };
-    enum DrawableType { DrawableColor };
+    enum DrawableType { DrawableColor, DrawableImage };
     std::vector<DrawableData> mDrawableData;
 
     std::shared_ptr<Node> mRoot;
