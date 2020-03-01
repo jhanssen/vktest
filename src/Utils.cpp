@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 
+// lifted and modified from https://stackoverflow.com/questions/7153935/how-to-convert-utf-8-stdstring-to-utf-16-stdwstring/7154226
 std::u16string utf8_to_utf16(const std::string& utf8)
 {
     std::vector<uint32_t> unicode;
