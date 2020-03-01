@@ -25,3 +25,9 @@
 [submodule "3rdparty/libjpeg-turbo"]
 	path = 3rdparty/libjpeg-turbo
 	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "3rdparty/harfbuzz"]
+	path = 3rdparty/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "3rdparty/msdfgen"]
+	path = 3rdparty/msdfgen
+	url = https://github.com/Chlumsky/msdfgen.git

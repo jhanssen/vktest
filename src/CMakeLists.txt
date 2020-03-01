@@ -31,10 +31,19 @@ include_directories(${THIRDPARTY_DIR}/LUrlParser)
 
 include_directories(${THIRDPARTY_DIR}/libjpeg-turbo)
 
+include_directories(${THIRDPARTY_DIR}/harfbuzz/src)
+
+include_directories(${THIRDPARTY_DIR}/msdfgen)
+
 add_library(LUrlParser STATIC ${THIRDPARTY_DIR}/LUrlParser/LUrlParser.cpp)
 
 find_package(OpenSSL REQUIRED)
-
 find_package(Vulkan REQUIRED)
-target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder turbojpeg-static LUrlParser OpenSSL::SSL OpenSSL::Crypto)
+find_package(ICU COMPONENTS uc i18n REQUIRED)
+include_directories(${ICU_INCLUDE_DIRS})
+
+target_link_libraries(vk glm::glm glfw ${GLFW_LIBRARIES} Vulkan::Vulkan
+    httplib shaderc nlohmann_json::nlohmann_json png_static webpdecoder
+    turbojpeg-static LUrlParser OpenSSL::SSL OpenSSL::Crypto lib_msdfgen
+    harfbuzz ICU::uc ICU::i18n)
 add_definitions(-DVULKAN_SDK=${VULKAN_SDK} -DCPPHTTPLIB_OPENSSL_SUPPORT)
