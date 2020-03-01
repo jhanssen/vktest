@@ -96,14 +96,20 @@ static void build(Scene::Item& item, const json& obj, Decoder& decoder, Scene::I
             }
         } else if (key == "text" && value.is_object()) {
             buildText(item, value);
-        } else if (key == "children" && value.is_array()) {
-            item.children.reserve(value.size());
-            for (auto& child : value) {
+        }
+    }
+
+    try {
+        const auto children = obj.at("children");
+        if (children.is_array()) {
+            item.children.reserve(children.size());
+            for (auto& child : children) {
                 assert(child.is_object());
                 item.children.push_back(std::make_shared<Scene::Item>());
                 build(*item.children.back().get(), child, decoder, &item);
             }
         }
+    } catch (const nlohmann::json::out_of_range& err) {
     }
 }
 
