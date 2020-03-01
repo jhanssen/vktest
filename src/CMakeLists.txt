@@ -11,6 +11,7 @@ set(SOURCES
     Decoder.cpp
     Fetch.cpp
     Rect.cpp
+    Utils.cpp
     Window.cpp
     render/Render.cpp
     scene/Scene.cpp
