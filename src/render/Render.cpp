@@ -19,6 +19,12 @@ struct RenderImageData
     glm::vec4 geometry;
 };
 
+struct RenderTextData
+{
+    glm::vec4 color;
+    float scale;
+};
+
 struct Render::RenderColor : public Render::Node::Drawable
 {
 public:
@@ -57,6 +63,25 @@ void Render::RenderImage::update(const vk::UniqueDevice& device, uint32_t curren
     changed[currentImage] = false;
 }
 
+struct Render::RenderText : public Render::Node::Drawable
+{
+public:
+    virtual void update(const vk::UniqueDevice& device, uint32_t currentText);
+
+    std::vector<bool> changed;
+    RenderTextData data;
+};
+
+void Render::RenderText::update(const vk::UniqueDevice& device, uint32_t currentImage)
+{
+    if (!changed[currentImage])
+        return;
+    void* out = device->mapMemory(*ubosMemory[currentImage], 0, sizeof(data), {});
+    memcpy(out, &data, sizeof(data));
+    device->unmapMemory(*ubosMemory[currentImage]);
+    changed[currentImage] = false;
+}
+
 static vk::UniqueShaderModule createShaderModule(const vk::UniqueDevice& device, const Buffer& buffer)
 {
     if (buffer.empty()) {
@@ -68,41 +93,7 @@ static vk::UniqueShaderModule createShaderModule(const vk::UniqueDevice& device,
     return device->createShaderModuleUnique(createInfo);
 }
 
-static uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties)
-{
-    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    return std::numeric_limits<uint32_t>::max();
-}
-
-static Render::VertexBuffer createBuffer(vk::PhysicalDevice physicalDevice, vk::Device device, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties)
-{
-    vk::BufferCreateInfo bufferInfo({}, size, usage, vk::SharingMode::eExclusive);
-
-    Render::VertexBuffer buf;
-    buf.buffer = device.createBufferUnique(bufferInfo);
-    if (!buf.buffer) {
-        return Render::VertexBuffer();
-    }
-
-    vk::MemoryRequirements memRequirements = device.getBufferMemoryRequirements(*buf.buffer);
-    vk::MemoryAllocateInfo allocInfo(memRequirements.size, findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties));
-
-    buf.memory = device.allocateMemoryUnique(allocInfo);
-    if (!buf.memory) {
-        return Render::VertexBuffer();
-    }
-
-    device.bindBufferMemory(*buf.buffer, *buf.memory, 0);
-    return buf;
-}
-
+/*
 static void copyBuffer(vk::Device device, vk::CommandPool commandPool, vk::Queue graphicsQueue,
                        vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size)
 {
@@ -127,6 +118,7 @@ static void copyBuffer(vk::Device device, vk::CommandPool commandPool, vk::Queue
     graphicsQueue.submit({ submitInfo }, {});
     graphicsQueue.waitIdle();
 }
+*/
 
 Render::Render(const Scene& scene, const Window& window)
     : mWindow(window)
@@ -158,7 +150,7 @@ Render::Render(const Scene& scene, const Window& window)
     makeRenderTree(scene);
 }
 
-vk::CommandBuffer Render::beginSingleCommand()
+vk::CommandBuffer Render::beginSingleCommand() const
 {
     const auto& device = mWindow.device();
 
@@ -178,7 +170,7 @@ vk::CommandBuffer Render::beginSingleCommand()
     return commandBuffer;
 }
 
-void Render::endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue)
+void Render::endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue) const
 {
     const auto& device = mWindow.device();
 
@@ -194,6 +186,44 @@ void Render::endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enque
     }
 
     device->freeCommandBuffers(*mCommandPool, { commandBuffer });
+}
+
+uint32_t Render::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const
+{
+    const vk::PhysicalDevice& physicalDevice = mWindow.physicalDevice();
+    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    return std::numeric_limits<uint32_t>::max();
+}
+
+Render::VertexBuffer Render::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const
+{
+    const vk::Device& device = *mWindow.device();
+
+    vk::BufferCreateInfo bufferInfo({}, size, usage, vk::SharingMode::eExclusive);
+
+    Render::VertexBuffer buf;
+    buf.buffer = device.createBufferUnique(bufferInfo);
+    if (!buf.buffer) {
+        return Render::VertexBuffer();
+    }
+
+    vk::MemoryRequirements memRequirements = device.getBufferMemoryRequirements(*buf.buffer);
+    vk::MemoryAllocateInfo allocInfo(memRequirements.size, findMemoryType(memRequirements.memoryTypeBits, properties));
+
+    buf.memory = device.allocateMemoryUnique(allocInfo);
+    if (!buf.memory) {
+        return Render::VertexBuffer();
+    }
+
+    device.bindBufferMemory(*buf.buffer, *buf.memory, 0);
+    return buf;
 }
 
 std::shared_ptr<Render::PipelineResult> Render::makePipeline(const PipelineData& data)
@@ -325,6 +355,32 @@ void Render::makeImageDrawableData()
     mDrawableData.push_back(std::move(drawableData));
 }
 
+void Render::makeTextDrawableData()
+{
+    // make pipeline
+    const PipelineData createData = {
+        Buffer::readFile("./text-vert.spv"),
+        Buffer::readFile("./text-frag.spv"),
+        []() { return RenderTextVertex::getBindingDescription(); },
+        []() { return RenderTextVertex::getAttributeDescriptions(); },
+        [](const vk::UniqueDevice& device) -> vk::UniqueDescriptorSetLayout {
+            vk::DescriptorSetLayoutBinding uboLayoutBindingVert(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex);
+            vk::DescriptorSetLayoutBinding uboLayoutBindingFrag(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment);
+            vk::DescriptorSetLayoutBinding uboLayoutBindings[] = { uboLayoutBindingVert, uboLayoutBindingFrag };
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, 2, uboLayoutBindings);
+            return device->createDescriptorSetLayoutUnique(layoutInfo);
+        }
+    };
+
+    DrawableData drawableData;
+
+    auto pipeline = makePipeline(createData);
+    drawableData.pipeline = pipeline;
+
+    assert(mDrawableData.size() == DrawableImage);
+    mDrawableData.push_back(std::move(drawableData));
+}
+
 void Render::makeDrawableDatas()
 {
     makeColorDrawableData();
@@ -349,7 +405,6 @@ std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& c
 
     const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
     const auto& device = mWindow.device();
-    const auto& physicalDevice = mWindow.physicalDevice();
     const auto& pipeline = drawableData.pipeline;
 
     auto colorDrawable = std::make_shared<RenderColor>();
@@ -359,7 +414,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& c
     colorDrawable->ubos.reserve(swapChainFramebuffers.size());
     colorDrawable->ubosMemory.reserve(swapChainFramebuffers.size());
     for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
-        auto ubo = createBuffer(physicalDevice, *device, colorSize,
+        auto ubo = createBuffer(colorSize,
                                 vk::BufferUsageFlagBits::eUniformBuffer,
                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         colorDrawable->ubos.push_back(std::move(ubo.buffer));
@@ -412,7 +467,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& c
     return colorDrawable;
 }
 
-void Render::transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout)
+void Render::transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const
 {
     vk::PipelineStageFlags srcStage, dstStage;
     vk::ImageMemoryBarrier barrier({}, {}, oldLayout, newLayout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
@@ -429,6 +484,12 @@ void Render::transitionImageLayout(const vk::UniqueImage& image, vk::Format form
 
         srcStage = vk::PipelineStageFlagBits::eTransfer;
         dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+    } else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal && newLayout == vk::ImageLayout::eTransferDstOptimal) {
+        barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+        srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+        dstStage = vk::PipelineStageFlagBits::eTransfer;
     } else {
         printf("invalid image transition\n");
         return;
@@ -439,7 +500,7 @@ void Render::transitionImageLayout(const vk::UniqueImage& image, vk::Format form
     endSingleCommand(commandBuffer);
 }
 
-void Render::copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height)
+void Render::copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height) const
 {
     vk::CommandBuffer commandBuffer = beginSingleCommand();
 
@@ -449,10 +510,20 @@ void Render::copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueI
     endSingleCommand(commandBuffer);
 }
 
+void Render::copyBufferToImage(vk::DeviceSize bufferOffset, uint32_t bufferRowLength, uint32_t bufferImageHeight, const vk::UniqueBuffer& buffer,
+                               const vk::UniqueImage& image, int32_t x, int32_t y, uint32_t width, uint32_t height) const
+{
+    vk::CommandBuffer commandBuffer = beginSingleCommand();
+
+    vk::BufferImageCopy region(bufferOffset, bufferRowLength, bufferImageHeight, { vk::ImageAspectFlagBits::eColor, 0, 0, 1 }, { x, y, 0 }, { width, height, 1 });
+    commandBuffer.copyBufferToImage(*buffer, *image, vk::ImageLayout::eTransferDstOptimal, { region });
+
+    endSingleCommand(commandBuffer);
+}
+
 std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::ImageData& image, const Rect& geom)
 {
     const auto& device = mWindow.device();
-    const auto& physicalDevice = mWindow.physicalDevice();
     const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
 
     auto imageDrawable = std::make_shared<RenderImage>();
@@ -489,7 +560,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
             return {};
         }
         const vk::MemoryRequirements memRequirements = device->getImageMemoryRequirements(*textureImage);
-        vk::MemoryAllocateInfo memoryAllocInfo(memRequirements.size, findMemoryType(physicalDevice, memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
+        vk::MemoryAllocateInfo memoryAllocInfo(memRequirements.size, findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
         vk::UniqueDeviceMemory textureImageMemory = device->allocateMemoryUnique(memoryAllocInfo);
         if (!textureImageMemory) {
             printf("failed to allocate texture image memory\n");
@@ -499,7 +570,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
 
         vk::DeviceSize imageSize = image.image->width * image.image->height * bpp;
         assert(imageSize == image.image->data.size());
-        auto staging = createBuffer(physicalDevice, *device, imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+        auto staging = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
                                     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         void* data = device->mapMemory(*staging.memory, 0, imageSize, {});
         memcpy(data, image.image->data.data(), imageSize);
@@ -549,7 +620,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
     imageDrawable->ubos.reserve(swapChainFramebuffers.size());
     imageDrawable->ubosMemory.reserve(swapChainFramebuffers.size());
     for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
-        auto ubo = createBuffer(physicalDevice, *device, colorSize,
+        auto ubo = createBuffer(colorSize,
                                 vk::BufferUsageFlagBits::eUniformBuffer,
                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         imageDrawable->ubos.push_back(std::move(ubo.buffer));

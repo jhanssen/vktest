@@ -14,6 +14,7 @@ set(SOURCES
     Utils.cpp
     Window.cpp
     render/Render.cpp
+    render/RenderText.cpp
     scene/Scene.cpp
     text/Font.cpp
     text/Layout.cpp
@@ -36,6 +37,8 @@ include_directories(${THIRDPARTY_DIR}/LUrlParser)
 include_directories(${THIRDPARTY_DIR}/libjpeg-turbo)
 
 include_directories(${THIRDPARTY_DIR}/harfbuzz/src)
+
+include_directories(${THIRDPARTY_DIR}/rectpack2D/src)
 
 include_directories(${THIRDPARTY_DIR}/msdfgen)
 

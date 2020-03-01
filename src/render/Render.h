@@ -5,6 +5,7 @@
 #include <Window.h>
 #include <Buffer.h>
 #include <Rect.h>
+#include "RenderText.h"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -16,11 +17,20 @@ public:
 
     void render(const Window::RenderData& data);
 
+    const Window& window() const { return mWindow; }
+
     struct VertexBuffer
     {
         vk::UniqueBuffer buffer;
         vk::UniqueDeviceMemory memory;
     };
+
+    void transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
+    void copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height) const;
+    void copyBufferToImage(vk::DeviceSize bufferOffset, uint32_t bufferRowLength, uint32_t bufferImageHeight, const vk::UniqueBuffer& buffer,
+                           const vk::UniqueImage& image, int32_t x, int32_t y, uint32_t width, uint32_t height) const;
+    VertexBuffer createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const;
+    uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
 
 private:
     struct PipelineData
@@ -55,7 +65,7 @@ private:
             // shared data
             std::shared_ptr<PipelineResult> pipeline;
             std::vector<vk::UniqueCommandBuffer> commandBuffers;
-            //vk::UniqueBuffer vertexBuffer;
+            vk::UniqueBuffer vertexBuffer;
             std::vector<vk::UniqueDeviceMemory> imagesMemory;
             std::vector<vk::UniqueImage> images;
             std::vector<vk::UniqueImageView> imageViews;
@@ -73,6 +83,7 @@ private:
 
     struct RenderColor;
     struct RenderImage;
+    struct RenderText;
 
     void traverseSceneItem(const std::shared_ptr<Scene::Item>& sceneItem,
                            std::shared_ptr<Node>& renderNode);
@@ -80,18 +91,17 @@ private:
 
     void makeColorDrawableData();
     void makeImageDrawableData();
+    void makeTextDrawableData();
     void makeDrawableDatas();
 
     std::shared_ptr<Node::Drawable> makeColorDrawable(const Color& color, const Rect& geometry);
     std::shared_ptr<Node::Drawable> makeImageDrawable(const Scene::ImageData& image, const Rect& geometry);
+    std::shared_ptr<Node::Drawable> makeImageDrawable(const Text& image, const Rect& geometry);
 
     void renderNode(const std::shared_ptr<Node>& node, const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
 
-    vk::CommandBuffer beginSingleCommand();
-    void endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue = true);
-
-    void transitionImageLayout(const vk::UniqueImage& image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-    void copyBufferToImage(const vk::UniqueBuffer& buffer, const vk::UniqueImage& image, uint32_t width, uint32_t height);
+    vk::CommandBuffer beginSingleCommand() const;
+    void endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue = true) const;
 
 private:
     const Window& mWindow;
