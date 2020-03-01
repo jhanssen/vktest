@@ -10,9 +10,12 @@ set(SOURCES
     Buffer.cpp
     Decoder.cpp
     Fetch.cpp
+    Rect.cpp
     Window.cpp
     render/Render.cpp
     scene/Scene.cpp
+    text/Font.cpp
+    text/Layout.cpp
     )
 
 add_executable(vk ${SOURCES})
