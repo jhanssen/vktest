@@ -62,7 +62,7 @@ Layout::~Layout()
 
 void Layout::clearBuffers()
 {
-    for (const auto& line : lines) {
+    for (const auto& line : mLines) {
         for (const auto& run : line.runs) {
             if (run.buffer) {
                 hb_buffer_destroy(run.buffer);
@@ -125,12 +125,12 @@ void Layout::addText(const std::u16string& t)
 
 void Layout::newLine(bool force)
 {
-    if (!force && !lines.empty()) {
-        if (lines.back().runs.empty())
+    if (!force && !mLines.empty()) {
+        if (mLines.back().runs.empty())
             return;
         //finalizeLastLine();
     }
-    lines.push_back({});
+    mLines.push_back({});
 }
 
 void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLinebreak)
@@ -154,11 +154,11 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
         }
     };
 
-    Line* line = &lines.back();
+    Line* line = &mLines.back();
     if (item.type == Item::Linebreak) {
         if (!skipNextLinebreak) {
             newLine(true);
-            line = &lines.back();
+            line = &mLines.back();
             currentWidth = 0.;
         }
         // either we're here because skipNextLinebreak == false, in which case we just added a new line
@@ -173,22 +173,22 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
     } else if (item.trim > 0 && currentWidth + item.trimmed.width <= mWidth) {
         addItem(line, item, item.trim);
         newLine();
-        line = &lines.back();
+        line = &mLines.back();
         currentWidth = 0.;
         skipNextLinebreak = true;
     } else if (item.rect.width <= mWidth) {
         // we are also go
         newLine();
-        line = &lines.back();
+        line = &mLines.back();
         addItem(line, item);
         currentWidth = item.rect.width;
         skipNextLinebreak = false;
     } else if (item.trim > 0 && item.trimmed.width <= mWidth) {
         // and go
         newLine();
-        line = &lines.back();
+        line = &mLines.back();
         addItem(line, item, item.trim);
-        line = &lines.back();
+        line = &mLines.back();
         currentWidth = 0.;
         skipNextLinebreak = true;
     } else {
@@ -200,9 +200,9 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
             if (r.width <= mWidth) {
                 // we fit now
                 newLine();
-                line = &lines.back();
+                line = &mLines.back();
                 addItem(line, { Item::Text, item.start, len - 1, 0, item.direction, r, r });
-                line = &lines.back();
+                line = &mLines.back();
                 currentWidth = 0.;
                 skipNextLinebreak = false;
 
@@ -222,7 +222,7 @@ void Layout::reshape()
     mGlyphCount = 0;
 
     const auto txt = mText.getBuffer();
-    for (auto& line : lines) {
+    for (auto& line : mLines) {
         for (auto& run : line.runs) {
             if (run.buffer) {
                 hb_buffer_destroy(run.buffer);
@@ -240,7 +240,7 @@ void Layout::reshape()
 void Layout::relayout()
 {
     clearBuffers();
-    lines.clear();
+    mLines.clear();
     mRunCount = 0;
     newLine();
 
@@ -398,8 +398,8 @@ void Layout::dumppre()
 
 void Layout::dump()
 {
-    printf("%zu lines\n", lines.size());
-    for (const auto& line : lines) {
+    printf("%zu lines\n", mLines.size());
+    for (const auto& line : mLines) {
         for (const auto& run : line.runs) {
             std::string str;
             mText.tempSubString(run.start, run.length).toUTF8String(str);

@@ -44,7 +44,7 @@ public:
 
         bool empty() const { return runs.empty(); };
     };
-    std::vector<Line> lines;
+    const std::vector<Line>& lines() const { return mLines; }
 
 private:
     void parse(const icu::UnicodeString& input, int32_t lastLineBreak = 0);
@@ -64,7 +64,8 @@ private:
     Font mFont;
     icu::UnicodeString mText;
     uint32_t mWidth, mHeight;
-    size_t mRunCount;
+    size_t mRunCount, mGlyphCount;
+    std::vector<Line> mLines;
 
 private:
     void insertItem(const Item& item, float& currentWidth, bool& skipNextLinebreak);

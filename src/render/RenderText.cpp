@@ -207,7 +207,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     const auto& device = mRender.window().device();
     const vk::DeviceSize imageSize = ImageWidth * ImageHeight;
 
-    for (const auto& line : layout.lines) {
+    for (const auto& line : layout.lines()) {
         dstX = rect.x;
         for (const auto& run : line.runs) {
             const auto& buffer = run.buffer;
