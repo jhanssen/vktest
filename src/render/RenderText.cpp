@@ -162,11 +162,13 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
         return { *contents.renderedBuffer, contents.geometry };
     }
 
-    Font measureFont(fontPath, RenderSize);// text.size);
+    Font measureFont(fontPath, text.size);
     const auto measureHbFont = measureFont.font();
 
     Font renderFont(fontPath, RenderSize);
     const auto renderHbFont = renderFont.font();
+
+    const float factor = RenderSize / static_cast<float>(text.size);
 
     Layout layout(measureFont);
     layout.setWidth(rect.width);
@@ -174,6 +176,9 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
 
     hb_font_extents_t measureFontExtents;
     hb_font_get_extents_for_direction(measureHbFont, HB_DIRECTION_LTR, &measureFontExtents);
+
+    hb_font_extents_t renderFontExtents;
+    hb_font_get_extents_for_direction(renderHbFont, HB_DIRECTION_LTR, &renderFontExtents);
 
     hb_draw_funcs_t* drawFuncs = hb_draw_funcs_create();
     hb_draw_funcs_set_move_to_func(drawFuncs, moveTo);
@@ -209,6 +214,8 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
     const float measureAscender = measureFontExtents.ascender / 64.f;
     const float measureDescender = measureFontExtents.descender / 64.f;
 
+    const float renderAscender = renderFontExtents.ascender / 64.f;
+
     const float lineHeight = measureAscender - measureDescender;
     //float dstX = rect.x, dstY = rect.y;
     float dstX = 0.f, dstY = 0.f;
@@ -239,7 +246,7 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
                     // top-left, bottom-right, bottom-left, top-left, top-right, bottom-right
 
                     const auto& ext = cacheHit->second.extents;
-                    const float dstTop = dstY + (measureAscender - ext.ybearing);
+                    const float dstTop = dstY + (renderAscender - ext.ybearing);
                     const float dstBottom = dstTop + prect.height();
 
                     vertices.push_back(makeVertex(prect.x, prect.y, dstX, dstBottom));
@@ -251,14 +258,14 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
 
                     // printf("extents %f %f %f %f\n", ext.xbearing, ext.ybearing, ext.width, ext.height);
 
-                    dstX += pos[i].x_advance / 64.f;
+                    dstX += (pos[i].x_advance / 64.f) * factor;
                     continue;
                 }
 
                 hb_glyph_extents_t extents;
                 if (!hb_font_get_glyph_extents(renderHbFont, info[i].codepoint, &extents)) {
                     // no extents
-                    dstX += pos[i].x_advance / 64.f;
+                    dstX += (pos[i].x_advance / 64.f) * factor;
                     continue;
                 }
 
@@ -266,7 +273,7 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
                 const uint32_t descent = abs(extents.y_bearing + extents.height);
                 if (!render(shape, renderHbFont, &measureFontExtents, drawFuncs, info[i].codepoint, descent)) {
                     // nothing to render
-                    dstX += pos[i].x_advance / 64.f;
+                    dstX += (pos[i].x_advance / 64.f) * factor;
                     continue;
                 }
                 if (!shape.validate()) {
@@ -310,7 +317,7 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
 
                 mGidCache[cacheKey] = { node, { extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f } };
 
-                const float dstTop = dstY + (measureAscender - (extents.y_bearing / 64.f));
+                const float dstTop = dstY + (renderAscender - (extents.y_bearing / 64.f));
                 const float dstBottom = dstTop + prect.height();
 
                 // printf("extents2 %f %f %f %f\n", extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f);
@@ -322,10 +329,10 @@ RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect
                 vertices.push_back(makeVertex(prect.right, prect.bottom, dstX + prect.width(), dstTop));
                 vertices.push_back(makeVertex(prect.right, prect.y, dstX + prect.width(), dstBottom));
 
-                dstX += pos[i].x_advance / 64.f;
+                dstX += (pos[i].x_advance / 64.f) * factor;
             }
         }
-        dstY += lineHeight;
+        dstY += lineHeight * factor;
         if (dstX > renderedGeometry.width)
             renderedGeometry.width = dstX;
     }
