@@ -43,16 +43,16 @@ static const char* directionToString(UBiDiDirection dir)
 }
 
 Layout::Layout(const Font& f)
-    : font(f), width(std::numeric_limits<uint32_t>::max()), height(std::numeric_limits<uint32_t>::max())
+    : mFont(f), mWidth(std::numeric_limits<uint32_t>::max()), mHeight(std::numeric_limits<uint32_t>::max()), mRunCount(0)
 {
 }
 
 Layout::Layout(const Font& f, const std::u16string& t, uint32_t w, uint32_t h)
-    : font(f), width(w), height(h)
+    : mFont(f), mWidth(w), mHeight(h), mRunCount(0)
 {
-    text.setTo(&t[0], t.size());
+    mText.setTo(&t[0], t.size());
     newLine();
-    parse(text);
+    parse(mText);
 }
 
 Layout::~Layout()
@@ -73,34 +73,34 @@ void Layout::clearBuffers()
 
 void Layout::setText(const std::u16string& t)
 {
-    prelayout.clear();
-    text.setTo(&t[0], t.size());
-    parse(text);
+    mPreLayout.clear();
+    mText.setTo(&t[0], t.size());
+    parse(mText);
     relayout();
 }
 
 void Layout::setWidth(uint32_t w)
 {
-    width = w;
+    mWidth = w;
     relayout();
 }
 
 void Layout::setHeight(uint32_t h)
 {
-    height = h;
+    mHeight = h;
     relayout();
 }
 
 void Layout::setGeometry(uint32_t w, uint32_t h)
 {
-    width = w;
-    height = h;
+    mWidth = w;
+    mHeight = h;
     relayout();
 }
 
 void Layout::addText(const std::u16string& t)
 {
-    if (prelayout.empty()) {
+    if (mPreLayout.empty()) {
         setText(t);
         return;
     }
@@ -109,13 +109,13 @@ void Layout::addText(const std::u16string& t)
     newtext.setTo(&t[0], t.size());
 
     // append the new text to our main text
-    text.append(newtext);
+    mText.append(newtext);
 
     // merge this text with the last item
-    auto& item = prelayout.back();
+    auto& item = mPreLayout.back();
     const int32_t lastLineBreak = item.start;
-    auto str = cloneString(text.tempSubString(item.start, item.length));
-    prelayout.pop_back();
+    auto str = cloneString(mText.tempSubString(item.start, item.length));
+    mPreLayout.pop_back();
 
     str.append(newtext);
 
@@ -135,9 +135,10 @@ void Layout::newLine(bool force)
 
 void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLinebreak)
 {
-    auto addItem = [](Line* line, const Item& item, int32_t trim = 0) {
+    auto addItem = [this](Line* line, const Item& item, int32_t trim = 0) {
         if (line->runs.empty()) {
             line->runs.push_back({ item.start, item.length - trim, item.direction, trim > 0 ? item.trimmed : item.rect, nullptr });
+            ++mRunCount;
         } else {
             auto& prev = line->runs.back();
             if (prev.direction == item.direction) {
@@ -148,6 +149,7 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
             } else {
                 // add
                 line->runs.push_back({ item.start, item.length - trim, item.direction, trim > 0 ? item.trimmed : item.rect, nullptr });
+                ++mRunCount;
             }
         }
     };
@@ -163,25 +165,25 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
         // or we're here because our last added run needed to be trimmed and thus we explicitly added a new line there.
         assert(line->runs.empty());
         skipNextLinebreak = false;
-    } else if (currentWidth + item.rect.width <= width) {
+    } else if (currentWidth + item.rect.width <= mWidth) {
         // we are go
         addItem(line, item);
         currentWidth += item.rect.width;
         skipNextLinebreak = false;
-    } else if (item.trim > 0 && currentWidth + item.trimmed.width <= width) {
+    } else if (item.trim > 0 && currentWidth + item.trimmed.width <= mWidth) {
         addItem(line, item, item.trim);
         newLine();
         line = &lines.back();
         currentWidth = 0.;
         skipNextLinebreak = true;
-    } else if (item.rect.width <= width) {
+    } else if (item.rect.width <= mWidth) {
         // we are also go
         newLine();
         line = &lines.back();
         addItem(line, item);
         currentWidth = item.rect.width;
         skipNextLinebreak = false;
-    } else if (item.trim > 0 && item.trimmed.width <= width) {
+    } else if (item.trim > 0 && item.trimmed.width <= mWidth) {
         // and go
         newLine();
         line = &lines.back();
@@ -193,9 +195,9 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
         // we are not go, we need to measure character by character
         int len = item.length - item.trim;
         while (len > 0) {
-            const auto txt = text.tempSubString(item.start, len - 1);
-            const auto r = font.measure(txt);
-            if (r.width <= width) {
+            const auto txt = mText.tempSubString(item.start, len - 1);
+            const auto r = mFont.measure(txt);
+            if (r.width <= mWidth) {
                 // we fit now
                 newLine();
                 line = &lines.back();
@@ -204,8 +206,8 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
                 currentWidth = 0.;
                 skipNextLinebreak = false;
 
-                const auto rest = text.tempSubString(item.start + (len - 1), item.length - (len - 1));
-                const auto rr = font.measure(rest);
+                const auto rest = mText.tempSubString(item.start + (len - 1), item.length - (len - 1));
+                const auto rr = mFont.measure(rest);
                 insertItem({ Item::Text, item.start + (len - 1), item.length - (len - 1), 0, item.direction, rr, rr }, currentWidth, skipNextLinebreak);
 
                 return;
@@ -217,7 +219,7 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
 
 void Layout::reshape()
 {
-    const auto txt = text.getBuffer();
+    const auto txt = mText.getBuffer();
     for (auto& line : lines) {
         for (auto& run : line.runs) {
             if (run.buffer) {
@@ -226,7 +228,7 @@ void Layout::reshape()
             run.buffer = hb_buffer_create();
             hb_buffer_add_utf16(run.buffer, reinterpret_cast<const uint16_t*>(txt) + run.start, run.length, 0, -1);
             hb_buffer_guess_segment_properties(run.buffer);
-            hb_shape(font.font(), run.buffer, nullptr, 0);
+            hb_shape(mFont.font(), run.buffer, nullptr, 0);
         }
     }
 }
@@ -235,11 +237,12 @@ void Layout::relayout()
 {
     clearBuffers();
     lines.clear();
+    mRunCount = 0;
     newLine();
 
     float currentWidth = 0.;
     bool skipNextLinebreak = false;
-    for (const auto& item : prelayout) {
+    for (const auto& item : mPreLayout) {
         insertItem(item, currentWidth, skipNextLinebreak);
     }
     reshape();
@@ -335,24 +338,24 @@ void Layout::parse(const icu::UnicodeString& input, int32_t lastLineBreak)
                 continue;
             }
             //assert(cur + lastLineBreak + (it->first - cur) <= text.length() + 1);
-            const auto txt = text.tempSubString(cur + lastLineBreak, it->first - cur);
+            const auto txt = mText.tempSubString(cur + lastLineBreak, it->first - cur);
             const auto len = txt.length();
             // check if the last character is a newline
             const auto last = txt[len - 1];
             if (ISNEWLINE(last)) {
                 if (len > 1) {
                     // this item is more than just a newline
-                    const Rect r = font.measure(text.tempSubString(cur + lastLineBreak, len - 1));
+                    const Rect r = mFont.measure(mText.tempSubString(cur + lastLineBreak, len - 1));
                     const auto trim = spacesAtEnd(txt) - 1; // - 1 accounts for the newline
-                    const Rect tr = trim > 0 ? font.measure(text.tempSubString(cur + lastLineBreak, len - 1 - trim)) : r;
-                    prelayout.push_back({ Item::Text, cur + lastLineBreak, len - 1, trim, static_cast<UBiDiDirection>(dir), r, tr });
+                    const Rect tr = trim > 0 ? mFont.measure(mText.tempSubString(cur + lastLineBreak, len - 1 - trim)) : r;
+                    mPreLayout.push_back({ Item::Text, cur + lastLineBreak, len - 1, trim, static_cast<UBiDiDirection>(dir), r, tr });
                 }
-                prelayout.push_back({ Item::Linebreak, cur + lastLineBreak + (len - 1), 1, 0, static_cast<UBiDiDirection>(dir), { 0 }, { 0 } });
+                mPreLayout.push_back({ Item::Linebreak, cur + lastLineBreak + (len - 1), 1, 0, static_cast<UBiDiDirection>(dir), { 0 }, { 0 } });
             } else {
-                const Rect r = font.measure(txt);
+                const Rect r = mFont.measure(txt);
                 const auto trim = spacesAtEnd(txt);
-                const Rect tr = trim > 0 ? font.measure(text.tempSubString(cur + lastLineBreak, len - trim)) : r;
-                prelayout.push_back({ Item::Text, cur + lastLineBreak, len, trim, static_cast<UBiDiDirection>(dir), r, tr });
+                const Rect tr = trim > 0 ? mFont.measure(mText.tempSubString(cur + lastLineBreak, len - trim)) : r;
+                mPreLayout.push_back({ Item::Text, cur + lastLineBreak, len, trim, static_cast<UBiDiDirection>(dir), r, tr });
             }
             cur = it->first;
             dir = it->second;
@@ -366,11 +369,11 @@ void Layout::parse(const icu::UnicodeString& input, int32_t lastLineBreak)
 
 void Layout::dumppre()
 {
-    printf("%zu items\n", prelayout.size());
-    for (const auto& item : prelayout) {
+    printf("%zu items\n", mPreLayout.size());
+    for (const auto& item : mPreLayout) {
         if (item.type == Item::Text) {
             std::string str;
-            text.tempSubString(item.start, item.length).toUTF8String(str);
+            mText.tempSubString(item.start, item.length).toUTF8String(str);
             const Rect r = item.rect.integralized();
             printf("item: start %d length %d trim %d direction %s text '%s' rect %.0f,%.0f+%.0fx%.0f",
                    item.start, item.length, item.trim, directionToString(item.direction), str.c_str(),
@@ -384,7 +387,7 @@ void Layout::dumppre()
         } else {
             printf("item: newline\n");
             assert(item.length == 1);
-            assert(ISNEWLINE(text.tempSubString(item.start, item.length)[0]));
+            assert(ISNEWLINE(mText.tempSubString(item.start, item.length)[0]));
         }
     }
 }
@@ -395,7 +398,7 @@ void Layout::dump()
     for (const auto& line : lines) {
         for (const auto& run : line.runs) {
             std::string str;
-            text.tempSubString(run.start, run.length).toUTF8String(str);
+            mText.tempSubString(run.start, run.length).toUTF8String(str);
             printf("run: '%s' ", str.c_str());
         }
         printf("\n");

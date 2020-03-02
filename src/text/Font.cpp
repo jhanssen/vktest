@@ -2,12 +2,12 @@
 #include <hb-ot.h>
 
 Font::Font()
-    : mFace(nullptr), mFont(nullptr)
+    : mFace(nullptr), mFont(nullptr), mSize(0)
 {
 }
 
 Font::Font(const std::string& path, uint32_t size)
-    : mFace(nullptr), mFont(nullptr)
+    : mFace(nullptr), mFont(nullptr), mPath(path), mSize(size)
 {
     hb_blob_t* blob = hb_blob_create_from_file(path.c_str());
     if (!blob) {
@@ -26,6 +26,8 @@ Font::Font(const Font& other)
         return;
     mFace = hb_face_reference(other.mFace);
     mFont = hb_font_reference(other.mFont);
+    mPath = other.mPath;
+    mSize = other.mSize;
 }
 
 Font::~Font()
@@ -45,10 +47,14 @@ Font& Font::operator=(const Font& other)
     if (!other.isValid()) {
         mFont = nullptr;
         mFace = nullptr;
+        mPath.clear();
+        mSize = 0;
         return *this;
     }
     mFace = hb_face_reference(other.mFace);
     mFont = hb_font_reference(other.mFont);
+    mPath = other.mPath;
+    mSize = other.mSize;
     return *this;
 }
 

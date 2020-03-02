@@ -1,11 +1,13 @@
 #ifndef RENDERTEXT_H
 #define RENDERTEXT_H
 
+#include "RectPacker.h"
 #include <vulkan/vulkan.hpp>
-#include <finders_interface.h> // our rectpacker, bad name for a header file
 #include <vector>
 #include <scene/Text.h>
+#include <text/Font.h>
 #include <Rect.h>
+#include <unordered_map>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec2.hpp>
@@ -17,22 +19,40 @@ class RenderText
 public:
     RenderText(const Render& render);
 
-    const vk::UniqueImageView& imageView() const { return mImageView; }
-    vk::UniqueBuffer renderText(const Text& text, const Rect& bounds);
+    vk::UniqueImageView imageView();
+    vk::Buffer renderText(const Text& text, const Rect& bounds, uint32_t& vertexCount);
 
 private:
+    struct FontGidKey
+    {
+        std::string path;
+        uint32_t size;
+        uint32_t gid;
+
+        bool operator==(const FontGidKey&) const;
+    };
+    struct FontGidData
+    {
+        RectPacker::Node* rect;
+    };
+    struct FontGidHasher
+    {
+        size_t operator()(const FontGidKey&) const noexcept;
+    };
+
     const Render& mRender;
 
-    typedef rectpack2D::empty_spaces<false, rectpack2D::default_empty_spaces> PackerSpaces;
-    typedef rectpack2D::output_rect_t<PackerSpaces> PackerRect;
-
-    std::vector<PackerRect> mRects;
+    RectPacker mRectPacker;
 
     vk::UniqueImage mImage;
     vk::UniqueDeviceMemory mImageMemory;
-    vk::UniqueBuffer mBuffer;
-    vk::UniqueDeviceMemory mBufferMemory;
-    vk::UniqueImageView mImageView;
+    vk::UniqueBuffer mImageBuffer;
+    vk::UniqueDeviceMemory mImageBufferMemory;
+
+    vk::UniqueBuffer mRenderedBuffer;
+    vk::UniqueDeviceMemory mRenderedBufferMemory;
+
+    std::unordered_map<FontGidKey, FontGidData, FontGidHasher> mGidCache;
 };
 
 struct RenderTextVertex

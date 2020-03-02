@@ -22,6 +22,8 @@ public:
 
     void addText(const std::u16string& text);
 
+    size_t runCount() const { return mRunCount; }
+
     void dump();
     void dumppre();
 
@@ -56,11 +58,12 @@ private:
         UBiDiDirection direction;
         Rect rect, trimmed;
     };
-    std::vector<Item> prelayout;
+    std::vector<Item> mPreLayout;
 
-    Font font;
-    icu::UnicodeString text;
-    uint32_t width, height;
+    Font mFont;
+    icu::UnicodeString mText;
+    uint32_t mWidth, mHeight;
+    size_t mRunCount;
 
 private:
     void insertItem(const Item& item, float& currentWidth, bool& skipNextLinebreak);

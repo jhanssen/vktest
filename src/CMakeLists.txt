@@ -15,6 +15,7 @@ set(SOURCES
     Window.cpp
     render/Render.cpp
     render/RenderText.cpp
+    render/RectPacker.cpp
     scene/Scene.cpp
     text/Font.cpp
     text/Layout.cpp

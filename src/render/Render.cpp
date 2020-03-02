@@ -1,4 +1,5 @@
 #include "Render.h"
+#include "RenderText.h"
 #include <Buffer.h>
 
 #define GLM_FORCE_RADIANS
@@ -25,7 +26,7 @@ struct RenderTextData
     float scale;
 };
 
-struct Render::RenderColor : public Render::Node::Drawable
+struct Render::RenderColorDrawable : public Render::Node::Drawable
 {
 public:
     virtual void update(const vk::UniqueDevice& device, uint32_t currentImage);
@@ -34,7 +35,7 @@ public:
     RenderColorData data;
 };
 
-void Render::RenderColor::update(const vk::UniqueDevice& device, uint32_t currentImage)
+void Render::RenderColorDrawable::update(const vk::UniqueDevice& device, uint32_t currentImage)
 {
     if (!changed[currentImage])
         return;
@@ -44,7 +45,7 @@ void Render::RenderColor::update(const vk::UniqueDevice& device, uint32_t curren
     changed[currentImage] = false;
 }
 
-struct Render::RenderImage : public Render::Node::Drawable
+struct Render::RenderImageDrawable : public Render::Node::Drawable
 {
 public:
     virtual void update(const vk::UniqueDevice& device, uint32_t currentImage);
@@ -53,7 +54,7 @@ public:
     RenderImageData data;
 };
 
-void Render::RenderImage::update(const vk::UniqueDevice& device, uint32_t currentImage)
+void Render::RenderImageDrawable::update(const vk::UniqueDevice& device, uint32_t currentImage)
 {
     if (!changed[currentImage])
         return;
@@ -63,7 +64,7 @@ void Render::RenderImage::update(const vk::UniqueDevice& device, uint32_t curren
     changed[currentImage] = false;
 }
 
-struct Render::RenderText : public Render::Node::Drawable
+struct Render::RenderTextDrawable : public Render::Node::Drawable
 {
 public:
     virtual void update(const vk::UniqueDevice& device, uint32_t currentText);
@@ -72,7 +73,7 @@ public:
     RenderTextData data;
 };
 
-void Render::RenderText::update(const vk::UniqueDevice& device, uint32_t currentImage)
+void Render::RenderTextDrawable::update(const vk::UniqueDevice& device, uint32_t currentImage)
 {
     if (!changed[currentImage])
         return;
@@ -145,6 +146,8 @@ Render::Render(const Scene& scene, const Window& window)
         printf("failed to create descriptor pool\n");
         return;
     }
+
+    mRenderText = std::make_shared<RenderText>(*this);
 
     makeDrawableDatas();
     makeRenderTree(scene);
@@ -226,7 +229,7 @@ Render::VertexBuffer Render::createBuffer(vk::DeviceSize size, vk::BufferUsageFl
     return buf;
 }
 
-std::shared_ptr<Render::PipelineResult> Render::makePipeline(const PipelineData& data)
+std::shared_ptr<Render::PipelineResult> Render::makePipeline(const PipelineData& data, vk::PrimitiveTopology topology)
 {
     const auto& device = mWindow.device();
     const auto& extent = mWindow.extent();
@@ -252,7 +255,7 @@ std::shared_ptr<Render::PipelineResult> Render::makePipeline(const PipelineData&
         vertexInputInfo = vk::PipelineVertexInputStateCreateInfo({}, 1, &bindingDescription, static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
     }
 
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleStrip, VK_FALSE);
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, topology, VK_FALSE);
 
     vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f);
 
@@ -323,7 +326,7 @@ void Render::makeColorDrawableData()
 
     DrawableData drawableData;
 
-    auto pipeline = makePipeline(createData);
+    auto pipeline = makePipeline(createData, vk::PrimitiveTopology::eTriangleStrip);
     drawableData.pipeline = pipeline;
 
     assert(mDrawableData.size() == DrawableColor);
@@ -348,7 +351,7 @@ void Render::makeImageDrawableData()
 
     DrawableData drawableData;
 
-    auto pipeline = makePipeline(createData);
+    auto pipeline = makePipeline(createData, vk::PrimitiveTopology::eTriangleStrip);
     drawableData.pipeline = pipeline;
 
     assert(mDrawableData.size() == DrawableImage);
@@ -374,10 +377,10 @@ void Render::makeTextDrawableData()
 
     DrawableData drawableData;
 
-    auto pipeline = makePipeline(createData);
+    auto pipeline = makePipeline(createData, vk::PrimitiveTopology::eTriangleList);
     drawableData.pipeline = pipeline;
 
-    assert(mDrawableData.size() == DrawableImage);
+    assert(mDrawableData.size() == DrawableText);
     mDrawableData.push_back(std::move(drawableData));
 }
 
@@ -385,6 +388,7 @@ void Render::makeDrawableDatas()
 {
     makeColorDrawableData();
     makeImageDrawableData();
+    makeTextDrawableData();
 }
 
 static inline float mix(float coord, float limit, float min, float max)
@@ -407,7 +411,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeColorDrawable(const Color& c
     const auto& device = mWindow.device();
     const auto& pipeline = drawableData.pipeline;
 
-    auto colorDrawable = std::make_shared<RenderColor>();
+    auto colorDrawable = std::make_shared<RenderColorDrawable>();
 
     // make ubos
     vk::DeviceSize colorSize = sizeof(RenderColorData);
@@ -526,7 +530,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
     const auto& device = mWindow.device();
     const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
 
-    auto imageDrawable = std::make_shared<RenderImage>();
+    auto imageDrawable = std::make_shared<RenderImageDrawable>();
 
     vk::Format vkFormat = vk::Format::eUndefined;
     int bpp = 0;
@@ -545,70 +549,63 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
         return {};
     }
 
-    // allocate images
-    // ### we probably don't need to do one of these for every swap chain frame buffer unless we expect the image content to change
-    imageDrawable->imagesMemory.reserve(swapChainFramebuffers.size());
-    imageDrawable->images.reserve(swapChainFramebuffers.size());
-    imageDrawable->imageViews.reserve(swapChainFramebuffers.size());
-    imageDrawable->imageSamplers.reserve(swapChainFramebuffers.size());
-    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
-        vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, vkFormat, { image.image->width, image.image->height, 1 }, 1, 1);
-        imageCreateInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-        vk::UniqueImage textureImage = device->createImageUnique(imageCreateInfo);
-        if (!textureImage) {
-            printf("failed to create texture image\n");
-            return {};
-        }
-        const vk::MemoryRequirements memRequirements = device->getImageMemoryRequirements(*textureImage);
-        vk::MemoryAllocateInfo memoryAllocInfo(memRequirements.size, findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
-        vk::UniqueDeviceMemory textureImageMemory = device->allocateMemoryUnique(memoryAllocInfo);
-        if (!textureImageMemory) {
-            printf("failed to allocate texture image memory\n");
-            return {};
-        }
-        device->bindImageMemory(*textureImage, *textureImageMemory, 0);
-
-        vk::DeviceSize imageSize = image.image->width * image.image->height * bpp;
-        assert(imageSize == image.image->data.size());
-        auto staging = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
-                                    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        void* data = device->mapMemory(*staging.memory, 0, imageSize, {});
-        memcpy(data, image.image->data.data(), imageSize);
-        device->unmapMemory(*staging.memory);
-
-        transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-        copyBufferToImage(staging.buffer, textureImage, image.image->width, image.image->height);
-        transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-        vk::ImageViewCreateInfo imageViewCreateInfo({}, *textureImage, vk::ImageViewType::e2D, vkFormat, {},
-                                                    { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
-        vk::UniqueImageView textureImageView = device->createImageViewUnique(imageViewCreateInfo);
-        if (!textureImageView) {
-            printf("failed to create texture image view\n");
-            return {};
-        }
-
-        vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear);
-        samplerCreateInfo.anisotropyEnable = VK_TRUE;
-        samplerCreateInfo.maxAnisotropy = 16.f;
-        samplerCreateInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-        samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-        samplerCreateInfo.compareEnable = VK_FALSE;
-        samplerCreateInfo.compareOp = vk::CompareOp::eAlways;
-        samplerCreateInfo.mipLodBias = 0.f;
-        samplerCreateInfo.minLod = 0.f;
-        samplerCreateInfo.maxLod = 0.f;
-        vk::UniqueSampler textureImageSampler = device->createSamplerUnique(samplerCreateInfo);
-        if (!textureImageSampler) {
-            printf("failed to create texture image sampler\n");
-            return {};
-        }
-
-        imageDrawable->imagesMemory.push_back(std::move(textureImageMemory));
-        imageDrawable->images.push_back(std::move(textureImage));
-        imageDrawable->imageViews.push_back(std::move(textureImageView));
-        imageDrawable->imageSamplers.push_back(std::move(textureImageSampler));
+    // allocate image
+    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, vkFormat, { image.image->width, image.image->height, 1 }, 1, 1);
+    imageCreateInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+    vk::UniqueImage textureImage = device->createImageUnique(imageCreateInfo);
+    if (!textureImage) {
+        printf("failed to create texture image\n");
+        return {};
     }
+    const vk::MemoryRequirements memRequirements = device->getImageMemoryRequirements(*textureImage);
+    vk::MemoryAllocateInfo memoryAllocInfo(memRequirements.size, findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
+    vk::UniqueDeviceMemory textureImageMemory = device->allocateMemoryUnique(memoryAllocInfo);
+    if (!textureImageMemory) {
+        printf("failed to allocate texture image memory\n");
+        return {};
+    }
+    device->bindImageMemory(*textureImage, *textureImageMemory, 0);
+
+    vk::DeviceSize imageSize = image.image->width * image.image->height * bpp;
+    assert(imageSize == image.image->data.size());
+    auto staging = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    void* data = device->mapMemory(*staging.memory, 0, imageSize, {});
+    memcpy(data, image.image->data.data(), imageSize);
+    device->unmapMemory(*staging.memory);
+
+    transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(staging.buffer, textureImage, image.image->width, image.image->height);
+    transitionImageLayout(textureImage, vkFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+    vk::ImageViewCreateInfo imageViewCreateInfo({}, *textureImage, vk::ImageViewType::e2D, vkFormat, {},
+                                                { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+    vk::UniqueImageView textureImageView = device->createImageViewUnique(imageViewCreateInfo);
+    if (!textureImageView) {
+        printf("failed to create texture image view\n");
+        return {};
+    }
+
+    vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear);
+    samplerCreateInfo.anisotropyEnable = VK_TRUE;
+    samplerCreateInfo.maxAnisotropy = 16.f;
+    samplerCreateInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerCreateInfo.compareEnable = VK_FALSE;
+    samplerCreateInfo.compareOp = vk::CompareOp::eAlways;
+    samplerCreateInfo.mipLodBias = 0.f;
+    samplerCreateInfo.minLod = 0.f;
+    samplerCreateInfo.maxLod = 0.f;
+    vk::UniqueSampler textureImageSampler = device->createSamplerUnique(samplerCreateInfo);
+    if (!textureImageSampler) {
+        printf("failed to create texture image sampler\n");
+        return {};
+    }
+
+    imageDrawable->imageMemory = std::move(textureImageMemory);
+    imageDrawable->image = std::move(textureImage);
+    imageDrawable->imageView = std::move(textureImageView);
+    imageDrawable->imageSampler = std::move(textureImageSampler);
 
     assert(mDrawableData.size() > DrawableImage);
     const auto& drawableData = mDrawableData[DrawableImage];
@@ -634,7 +631,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
     imageDrawable->descriptorSets.reserve(swapChainFramebuffers.size());
     for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
         vk::DescriptorBufferInfo bufferInfo(*imageDrawable->ubos[i], 0, sizeof(RenderColorData));
-        vk::DescriptorImageInfo imageInfo(*imageDrawable->imageSamplers[i], *imageDrawable->imageViews[i], vk::ImageLayout::eShaderReadOnlyOptimal);
+        vk::DescriptorImageInfo imageInfo(*imageDrawable->imageSampler, *imageDrawable->imageView, vk::ImageLayout::eShaderReadOnlyOptimal);
         vk::WriteDescriptorSet bufferDescriptorWrite(*sets[i], 0, 0, 1, vk::DescriptorType::eUniformBuffer, {}, &bufferInfo);
         vk::WriteDescriptorSet imageDescriptorWrite(*sets[i], 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, {});
         device->updateDescriptorSets({ bufferDescriptorWrite, imageDescriptorWrite }, {});
@@ -673,6 +670,103 @@ std::shared_ptr<Render::Node::Drawable> Render::makeImageDrawable(const Scene::I
     return imageDrawable;
 }
 
+std::shared_ptr<Render::Node::Drawable> Render::makeTextDrawable(const Text& text, const Rect& geometry)
+{
+    const auto& device = mWindow.device();
+    const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
+
+    auto textDrawable = std::make_shared<RenderTextDrawable>();
+
+    uint32_t vertexCount;
+    const vk::Buffer vertexBuffer = mRenderText->renderText(text, geometry, vertexCount);
+    const vk::UniqueImageView& imageView = mRenderText->imageView();
+    if (!imageView) {
+        printf("failed to get image view\n");
+        return {};
+    }
+
+    vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear);
+    samplerCreateInfo.anisotropyEnable = VK_TRUE;
+    samplerCreateInfo.maxAnisotropy = 16.f;
+    samplerCreateInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerCreateInfo.compareEnable = VK_FALSE;
+    samplerCreateInfo.compareOp = vk::CompareOp::eAlways;
+    samplerCreateInfo.mipLodBias = 0.f;
+    samplerCreateInfo.minLod = 0.f;
+    samplerCreateInfo.maxLod = 0.f;
+    vk::UniqueSampler imageSampler = device->createSamplerUnique(samplerCreateInfo);
+    if (!imageSampler) {
+        printf("failed to create texture image sampler\n");
+        return {};
+    }
+
+    textDrawable->imageSampler = std::move(imageSampler);
+    textDrawable->imageView = mRenderText->imageView();
+
+    assert(mDrawableData.size() > DrawableText);
+    const auto& drawableData = mDrawableData[DrawableText];
+
+    const auto& pipeline = drawableData.pipeline;
+
+    // make ubos
+    vk::DeviceSize colorSize = sizeof(RenderColorData);
+    textDrawable->ubos.reserve(swapChainFramebuffers.size());
+    textDrawable->ubosMemory.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
+        auto ubo = createBuffer(colorSize,
+                                vk::BufferUsageFlagBits::eUniformBuffer,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        textDrawable->ubos.push_back(std::move(ubo.buffer));
+        textDrawable->ubosMemory.push_back(std::move(ubo.memory));
+    }
+
+    // allocate descriptor sets
+    std::vector<vk::DescriptorSetLayout> layouts(swapChainFramebuffers.size(), *pipeline->descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo descriptorAllocInfo(*mDescriptorPool, swapChainFramebuffers.size(), layouts.data());
+    auto sets = device->allocateDescriptorSetsUnique(descriptorAllocInfo);
+    textDrawable->descriptorSets.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < swapChainFramebuffers.size(); ++i) {
+        vk::DescriptorBufferInfo bufferInfo(*textDrawable->ubos[i], 0, sizeof(RenderColorData));
+        vk::DescriptorImageInfo imageInfo(*textDrawable->imageSampler, *textDrawable->imageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+        vk::WriteDescriptorSet bufferDescriptorWrite(*sets[i], 0, 0, 1, vk::DescriptorType::eUniformBuffer, {}, &bufferInfo);
+        vk::WriteDescriptorSet imageDescriptorWrite(*sets[i], 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, {});
+        device->updateDescriptorSets({ bufferDescriptorWrite, imageDescriptorWrite }, {});
+
+        textDrawable->descriptorSets.push_back(std::move(sets[i]));
+    }
+
+    vk::CommandBufferAllocateInfo allocCommandBufferInfo(*mCommandPool, vk::CommandBufferLevel::eSecondary, swapChainFramebuffers.size());
+    auto commandBuffers = device->allocateCommandBuffersUnique(allocCommandBufferInfo);
+    if (commandBuffers.empty()) {
+        printf("failed to allocate command buffers!\n");
+        std::shared_ptr<Render::Node::Drawable>();
+    }
+
+    textDrawable->commandBuffers.reserve(swapChainFramebuffers.size());
+    for (size_t i = 0; i < commandBuffers.size(); i++) {
+        vk::CommandBufferBeginInfo beginInfo;
+        commandBuffers[i]->begin(beginInfo);
+
+        commandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline->pipeline);
+        commandBuffers[i]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline->layout, 0, { *textDrawable->descriptorSets[i] }, {});
+        commandBuffers[i]->bindVertexBuffers(0, { vertexBuffer }, { 0 });
+        commandBuffers[i]->draw(vertexCount, 1, 0, 0);
+        //commandBuffers[i]->draw(6, 1, 0, 0);
+
+        commandBuffers[i]->end();
+
+        textDrawable->commandBuffers.push_back(std::move(commandBuffers[i]));
+    }
+
+    textDrawable->changed = std::vector<bool>(mWindow.swapChainFramebuffers().size(), true);
+
+    textDrawable->data.color = { text.color.r, text.color.g, text.color.b, text.color. a };
+    textDrawable->data.scale = 1.f;
+
+    return textDrawable;
+}
+
 void Render::traverseSceneItem(const std::shared_ptr<Scene::Item>& sceneItem,
                                std::shared_ptr<Node>& renderNode)
 {
@@ -686,6 +780,9 @@ void Render::traverseSceneItem(const std::shared_ptr<Scene::Item>& sceneItem,
         }
         if (sceneItem->image.image) {
             renderNode->drawables.push_back(makeImageDrawable(sceneItem->image, sceneItem->geometry));
+        }
+        if (!sceneItem->text.contents.empty() && sceneItem->text.size > 0) {
+            renderNode->drawables.push_back(makeTextDrawable(sceneItem->text, sceneItem->geometry));
         }
     }
 

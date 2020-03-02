@@ -16,6 +16,9 @@ public:
 
     Font& operator=(const Font& other);
 
+    const std::string path() const { return mPath; }
+    const uint32_t size() const { return mSize; }
+
     Rect measure(const icu::UnicodeString& str) const;
     bool isValid() const { return mFace != nullptr; }
 
@@ -25,6 +28,9 @@ public:
 private:
     hb_face_t* mFace;
     hb_font_t* mFont;
+
+    std::string mPath;
+    uint32_t mSize;
 };
 
 #endif // FONT_H

@@ -1,11 +1,11 @@
 #ifndef RENDER_H
 #define RENDER_H
 
+#include "RenderText.h"
 #include <scene/Scene.h>
 #include <Window.h>
 #include <Buffer.h>
 #include <Rect.h>
-#include "RenderText.h"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -54,7 +54,7 @@ private:
         vk::UniquePipelineLayout layout;
         vk::UniqueDescriptorSetLayout descriptorSetLayout;
     };
-    std::shared_ptr<PipelineResult> makePipeline(const PipelineData& data);
+    std::shared_ptr<PipelineResult> makePipeline(const PipelineData& data, vk::PrimitiveTopology topology);
 
     struct Node
     {
@@ -66,10 +66,10 @@ private:
             std::shared_ptr<PipelineResult> pipeline;
             std::vector<vk::UniqueCommandBuffer> commandBuffers;
             vk::UniqueBuffer vertexBuffer;
-            std::vector<vk::UniqueDeviceMemory> imagesMemory;
-            std::vector<vk::UniqueImage> images;
-            std::vector<vk::UniqueImageView> imageViews;
-            std::vector<vk::UniqueSampler> imageSamplers;
+            vk::UniqueDeviceMemory imageMemory;
+            vk::UniqueImage image;
+            vk::UniqueImageView imageView;
+            vk::UniqueSampler imageSampler;
             std::vector<vk::UniqueDeviceMemory> ubosMemory;
             std::vector<vk::UniqueBuffer> ubos;
             std::vector<vk::UniqueDescriptorSet> descriptorSets;
@@ -81,9 +81,9 @@ private:
         std::vector<std::shared_ptr<Node> > children;
     };
 
-    struct RenderColor;
-    struct RenderImage;
-    struct RenderText;
+    struct RenderColorDrawable;
+    struct RenderImageDrawable;
+    struct RenderTextDrawable;
 
     void traverseSceneItem(const std::shared_ptr<Scene::Item>& sceneItem,
                            std::shared_ptr<Node>& renderNode);
@@ -96,7 +96,7 @@ private:
 
     std::shared_ptr<Node::Drawable> makeColorDrawable(const Color& color, const Rect& geometry);
     std::shared_ptr<Node::Drawable> makeImageDrawable(const Scene::ImageData& image, const Rect& geometry);
-    std::shared_ptr<Node::Drawable> makeImageDrawable(const Text& image, const Rect& geometry);
+    std::shared_ptr<Node::Drawable> makeTextDrawable(const Text& image, const Rect& geometry);
 
     void renderNode(const std::shared_ptr<Node>& node, const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
 
@@ -112,10 +112,11 @@ private:
     {
         std::shared_ptr<PipelineResult> pipeline;
     };
-    enum DrawableType { DrawableColor, DrawableImage };
+    enum DrawableType { DrawableColor, DrawableImage, DrawableText };
     std::vector<DrawableData> mDrawableData;
 
     std::shared_ptr<Node> mRoot;
+    std::shared_ptr<RenderText> mRenderText;
 };
 
 #endif
