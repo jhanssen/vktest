@@ -323,7 +323,7 @@ inline void hash_combine(std::size_t& seed, const T& v, Rest... rest)
 size_t RenderText::FontGidHasher::operator()(const FontGidKey& key) const noexcept
 {
     size_t h = 0;
-    hash_combine(h, std::hash<std::string>()(key.path), std::hash<uint32_t>()(key.size), std::hash<uint32_t>()(key.gid));
+    hash_combine(h, key.path, key.size, key.gid);
     return h;
 }
 
