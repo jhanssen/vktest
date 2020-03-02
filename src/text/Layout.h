@@ -23,6 +23,7 @@ public:
     void addText(const std::u16string& text);
 
     size_t runCount() const { return mRunCount; }
+    size_t glyphCount() const { return mGlyphCount; }
 
     void dump();
     void dumppre();

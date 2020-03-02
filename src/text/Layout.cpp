@@ -43,12 +43,12 @@ static const char* directionToString(UBiDiDirection dir)
 }
 
 Layout::Layout(const Font& f)
-    : mFont(f), mWidth(std::numeric_limits<uint32_t>::max()), mHeight(std::numeric_limits<uint32_t>::max()), mRunCount(0)
+    : mFont(f), mWidth(std::numeric_limits<uint32_t>::max()), mHeight(std::numeric_limits<uint32_t>::max()), mRunCount(0), mGlyphCount(0)
 {
 }
 
 Layout::Layout(const Font& f, const std::u16string& t, uint32_t w, uint32_t h)
-    : mFont(f), mWidth(w), mHeight(h), mRunCount(0)
+    : mFont(f), mWidth(w), mHeight(h), mRunCount(0), mGlyphCount(0)
 {
     mText.setTo(&t[0], t.size());
     newLine();
@@ -219,6 +219,8 @@ void Layout::insertItem(const Item& item, float& currentWidth, bool& skipNextLin
 
 void Layout::reshape()
 {
+    mGlyphCount = 0;
+
     const auto txt = mText.getBuffer();
     for (auto& line : lines) {
         for (auto& run : line.runs) {
@@ -229,6 +231,8 @@ void Layout::reshape()
             hb_buffer_add_utf16(run.buffer, reinterpret_cast<const uint16_t*>(txt) + run.start, run.length, 0, -1);
             hb_buffer_guess_segment_properties(run.buffer);
             hb_shape(mFont.font(), run.buffer, nullptr, 0);
+
+            mGlyphCount += hb_buffer_get_length(run.buffer);
         }
     }
 }
