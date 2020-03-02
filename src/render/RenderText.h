@@ -20,7 +20,15 @@ public:
     RenderText(const Render& render);
 
     vk::UniqueImageView imageView();
-    vk::Buffer renderText(const Text& text, const Rect& bounds, uint32_t& vertexCount);
+
+    struct RenderTextResult
+    {
+        vk::Buffer buffer;
+        Rect geometry;
+    };
+    RenderTextResult renderText(const Text& text, const Rect& bounds, uint32_t& vertexCount);
+
+    uint32_t renderSize() const;
 
 private:
     struct FontGidKey
@@ -56,6 +64,7 @@ private:
     {
         vk::UniqueBuffer renderedBuffer;
         vk::UniqueDeviceMemory renderedBufferMemory;
+        Rect geometry;
         uint32_t numVertices;
     };
     struct FontContentsHasher

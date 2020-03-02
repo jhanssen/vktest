@@ -5,6 +5,7 @@
 #include <msdfgen.h>
 #include <glm/glm.hpp>
 
+constexpr uint32_t RenderSize = 24;
 constexpr uint32_t ImageWidth = 1024;
 constexpr uint32_t ImageHeight = 1024;
 constexpr vk::Format ImageFormat = vk::Format::eR8Unorm;
@@ -135,6 +136,11 @@ RenderText::RenderText(const Render& render)
     mImageBufferMemory = std::move(staging.memory);
 }
 
+uint32_t RenderText::renderSize() const
+{
+    return RenderSize;
+}
+
 vk::UniqueImageView RenderText::imageView()
 {
     const auto& device = mRender.window().device();
@@ -143,7 +149,7 @@ vk::UniqueImageView RenderText::imageView()
     return device->createImageViewUnique(imageViewCreateInfo);
 }
 
-vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& vertexCount)
+RenderText::RenderTextResult RenderText::renderText(const Text& text, const Rect& rect, uint32_t& vertexCount)
 {
     const std::string fontPath = "./font.ttf";
 
@@ -153,18 +159,21 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
         // hit!
         const auto& contents = contentsCacheHit->second;
         vertexCount = contents.numVertices;
-        return *contents.renderedBuffer;
+        return { *contents.renderedBuffer, contents.geometry };
     }
 
-    Font fontf(fontPath, text.size);
-    const auto hbfont = fontf.font();
+    Font measureFont(fontPath, RenderSize);// text.size);
+    const auto measureHbFont = measureFont.font();
 
-    Layout layout(fontf);
+    Font renderFont(fontPath, RenderSize);
+    const auto renderHbFont = renderFont.font();
+
+    Layout layout(measureFont);
     layout.setWidth(rect.width);
     layout.setText(utf8_to_utf16(text.contents));
 
-    hb_font_extents_t fontExtents;
-    hb_font_get_extents_for_direction(hbfont, HB_DIRECTION_LTR, &fontExtents);
+    hb_font_extents_t measureFontExtents;
+    hb_font_get_extents_for_direction(measureHbFont, HB_DIRECTION_LTR, &measureFontExtents);
 
     hb_draw_funcs_t* drawFuncs = hb_draw_funcs_create();
     hb_draw_funcs_set_move_to_func(drawFuncs, moveTo);
@@ -197,18 +206,22 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
         };
     };
 
-    const float ascender = fontExtents.ascender / 64.f;
-    const float descender = fontExtents.descender / 64.f;
-    const float lineHeight = ascender - descender;
-    float dstX = rect.x, dstY = rect.y;
+    const float measureAscender = measureFontExtents.ascender / 64.f;
+    const float measureDescender = measureFontExtents.descender / 64.f;
+
+    const float lineHeight = measureAscender - measureDescender;
+    //float dstX = rect.x, dstY = rect.y;
+    float dstX = 0.f, dstY = 0.f;
 
     // printf("asc %f desc %f\n", ascender, descender);
 
     const auto& device = mRender.window().device();
     const vk::DeviceSize imageSize = ImageWidth * ImageHeight;
 
+    Rect renderedGeometry;
+
     for (const auto& line : layout.lines()) {
-        dstX = rect.x;
+        dstX = 0.f;//rect.x;
         for (const auto& run : line.runs) {
             const auto& buffer = run.buffer;
             assert(buffer != nullptr);
@@ -219,22 +232,22 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
 
             for (unsigned int i = 0; i < len; ++i) {
                 //printf("got glyph idx %u\n", info[i].codepoint);
-                FontGidKey cacheKey { fontf.path(), fontf.size(), info[i].codepoint };
+                FontGidKey cacheKey { renderFont.path(), renderFont.size(), info[i].codepoint };
                 auto cacheHit = mGidCache.find(cacheKey);
                 if (cacheHit != mGidCache.end()) {
-                    const RectPacker::Rect& rect = cacheHit->second.rect->rect;
+                    const RectPacker::Rect& prect = cacheHit->second.rect->rect;
                     // top-left, bottom-right, bottom-left, top-left, top-right, bottom-right
 
                     const auto& ext = cacheHit->second.extents;
-                    const float dstTop = dstY + (ascender - ext.ybearing);
-                    const float dstBottom = dstTop + rect.height();
+                    const float dstTop = dstY + (measureAscender - ext.ybearing);
+                    const float dstBottom = dstTop + prect.height();
 
-                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
-                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstTop));
-                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
-                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
-                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
-                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstBottom));
+                    vertices.push_back(makeVertex(prect.x, prect.y, dstX, dstBottom));
+                    vertices.push_back(makeVertex(prect.x, prect.bottom, dstX, dstTop));
+                    vertices.push_back(makeVertex(prect.right, prect.bottom, dstX + prect.width(), dstTop));
+                    vertices.push_back(makeVertex(prect.x, prect.y, dstX, dstBottom));
+                    vertices.push_back(makeVertex(prect.right, prect.bottom, dstX + prect.width(), dstTop));
+                    vertices.push_back(makeVertex(prect.right, prect.y, dstX + prect.width(), dstBottom));
 
                     // printf("extents %f %f %f %f\n", ext.xbearing, ext.ybearing, ext.width, ext.height);
 
@@ -243,7 +256,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 }
 
                 hb_glyph_extents_t extents;
-                if (!hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents)) {
+                if (!hb_font_get_glyph_extents(renderHbFont, info[i].codepoint, &extents)) {
                     // no extents
                     dstX += pos[i].x_advance / 64.f;
                     continue;
@@ -251,7 +264,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
 
                 msdfgen::Shape shape;
                 const uint32_t descent = abs(extents.y_bearing + extents.height);
-                if (!render(shape, hbfont, &fontExtents, drawFuncs, info[i].codepoint, descent)) {
+                if (!render(shape, renderHbFont, &measureFontExtents, drawFuncs, info[i].codepoint, descent)) {
                     // nothing to render
                     dstX += pos[i].x_advance / 64.f;
                     continue;
@@ -276,44 +289,47 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 const int ymax = std::min<int>(ref.height, ceil(bounds.t) + range2);
 
                 auto node = mRectPacker.insert(xmax - xmin, ymax - ymin);
-                const RectPacker::Rect& rect = node->rect;
+                const RectPacker::Rect& prect = node->rect;
 
                 uint8_t* data = static_cast<uint8_t*>(device->mapMemory(*mImageBufferMemory, 0, imageSize, {}));
-                data += rect.y * ImageWidth;
+                data += prect.y * ImageWidth;
 
                 auto pixel = ref.pixels;
                 pixel += ymin * ref.width;
                 for (int row = ymin; row < ymax; ++row) {
                     pixel += xmin;
-                    data += rect.x;
+                    data += prect.x;
                     for (int col = xmin; col < xmax; ++col) {
                         *data++ = msdfgen::clamp(int((*pixel++)*0x100), 0xff);
                     }
                     pixel += ref.width - xmax;
-                    data += ImageWidth - (rect.x + (xmax - xmin));;
+                    data += ImageWidth - (prect.x + (xmax - xmin));;
                 }
 
                 device->unmapMemory(*mImageBufferMemory);
 
                 mGidCache[cacheKey] = { node, { extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f } };
 
-                const float dstTop = dstY + (ascender - (extents.y_bearing / 64.f));
-                const float dstBottom = dstTop + rect.height();
+                const float dstTop = dstY + (measureAscender - (extents.y_bearing / 64.f));
+                const float dstBottom = dstTop + prect.height();
 
                 // printf("extents2 %f %f %f %f\n", extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f);
 
-                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
-                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstTop));
-                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
-                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
-                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
-                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstBottom));
+                vertices.push_back(makeVertex(prect.x, prect.y, dstX, dstBottom));
+                vertices.push_back(makeVertex(prect.x, prect.bottom, dstX, dstTop));
+                vertices.push_back(makeVertex(prect.right, prect.bottom, dstX + prect.width(), dstTop));
+                vertices.push_back(makeVertex(prect.x, prect.y, dstX, dstBottom));
+                vertices.push_back(makeVertex(prect.right, prect.bottom, dstX + prect.width(), dstTop));
+                vertices.push_back(makeVertex(prect.right, prect.y, dstX + prect.width(), dstBottom));
 
                 dstX += pos[i].x_advance / 64.f;
             }
         }
         dstY += lineHeight;
+        if (dstX > renderedGeometry.width)
+            renderedGeometry.width = dstX;
     }
+    renderedGeometry.height = dstY;
 
     mRender.transitionImageLayout(mImage, ImageFormat, vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eTransferDstOptimal);
     mRender.copyBufferToImage(mImageBuffer, mImage, ImageWidth, ImageHeight);
@@ -327,6 +343,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     contentsData.renderedBuffer = std::move(buffer.buffer);
     contentsData.renderedBufferMemory = std::move(buffer.memory);
     contentsData.numVertices = vertices.size();
+    contentsData.geometry = renderedGeometry;
 
     void* out = device->mapMemory(*contentsData.renderedBufferMemory, 0, bufferSize, {});
     memcpy(out, vertices.data(), bufferSize);
@@ -342,7 +359,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     // }
 
     vertexCount = vertices.size();
-    return renderedBuffer;
+    return { renderedBuffer, renderedGeometry };
 }
 
 // lifted from https://stackoverflow.com/questions/2590677/how-do-i-combine-hash-values-in-c0x

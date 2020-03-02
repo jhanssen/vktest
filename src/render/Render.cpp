@@ -8,6 +8,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 struct RenderColorData
 {
@@ -23,7 +24,7 @@ struct RenderImageData
 struct RenderTextData
 {
     glm::vec4 color;
-    float scale;
+    glm::mat4 projection;
 };
 
 struct Render::RenderColorDrawable : public Render::Node::Drawable
@@ -678,7 +679,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeTextDrawable(const Text& tex
     auto textDrawable = std::make_shared<RenderTextDrawable>();
 
     uint32_t vertexCount;
-    const vk::Buffer vertexBuffer = mRenderText->renderText(text, geometry, vertexCount);
+    const auto renderData = mRenderText->renderText(text, geometry, vertexCount);
     const vk::UniqueImageView& imageView = mRenderText->imageView();
     if (!imageView) {
         printf("failed to get image view\n");
@@ -750,7 +751,7 @@ std::shared_ptr<Render::Node::Drawable> Render::makeTextDrawable(const Text& tex
 
         commandBuffers[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline->pipeline);
         commandBuffers[i]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline->layout, 0, { *textDrawable->descriptorSets[i] }, {});
-        commandBuffers[i]->bindVertexBuffers(0, { vertexBuffer }, { 0 });
+        commandBuffers[i]->bindVertexBuffers(0, { renderData.buffer }, { 0 });
         commandBuffers[i]->draw(vertexCount, 1, 0, 0);
         //commandBuffers[i]->draw(6, 1, 0, 0);
 
@@ -761,8 +762,16 @@ std::shared_ptr<Render::Node::Drawable> Render::makeTextDrawable(const Text& tex
 
     textDrawable->changed = std::vector<bool>(mWindow.swapChainFramebuffers().size(), true);
 
-    textDrawable->data.color = { text.color.r, text.color.g, text.color.b, text.color. a };
-    textDrawable->data.scale = 1.f;
+    const float factor = text.size / static_cast<float>(mRenderText->renderSize());
+    const float tx = mix(geometry.x, mWindow.width(), -1.0f, 1.0f);
+    const float ty = mix(geometry.y, mWindow.height(), -1.0f, 1.0f);
+
+    glm::mat4 projection = glm::mat4(1.0f);
+    projection = glm::scale(projection, glm::vec3(factor, factor, 1.0f));
+    projection = glm::translate(projection, glm::vec3(1.0f + (tx / factor), 1.0f + (ty / factor), 0.0f));
+
+    textDrawable->data.projection = projection;
+    textDrawable->data.color = { text.color.r, text.color.g, text.color.b, text.color.a };
 
     return textDrawable;
 }
