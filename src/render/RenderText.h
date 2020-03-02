@@ -34,6 +34,10 @@ private:
     struct FontGidData
     {
         RectPacker::Node* rect;
+        struct {
+            float xbearing, ybearing;
+            float width, height;
+        } extents;
     };
     struct FontGidHasher
     {

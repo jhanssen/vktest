@@ -191,8 +191,12 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
         };
     };
 
-    const float LineHeight = 20.f;
+    const float ascender = fontExtents.ascender / 64.f;
+    const float descender = fontExtents.descender / 64.f;
+    const float lineHeight = ascender - descender;
     float dstX = rect.x, dstY = rect.y;
+
+    // printf("asc %f desc %f\n", ascender, descender);
 
     const auto& device = mRender.window().device();
     const vk::DeviceSize imageSize = ImageWidth * ImageHeight;
@@ -214,12 +218,19 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 if (cacheHit != mGidCache.end()) {
                     const RectPacker::Rect& rect = cacheHit->second.rect->rect;
                     // top-left, bottom-right, bottom-left, top-left, top-right, bottom-right
-                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
-                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY));
-                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
-                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
-                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
-                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY + rect.height()));
+
+                    const auto& ext = cacheHit->second.extents;
+                    const float dstTop = dstY + (ascender - ext.ybearing);
+                    const float dstBottom = dstTop + rect.height();
+
+                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
+                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstTop));
+                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
+                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
+                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
+                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstBottom));
+
+                    // printf("extents %f %f %f %f\n", ext.xbearing, ext.ybearing, ext.width, ext.height);
 
                     dstX += pos[i].x_advance / 64.f;
                     continue;
@@ -270,19 +281,27 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
 
                 device->unmapMemory(*mImageBufferMemory);
 
-                mGidCache[cacheKey] = { node };
+                hb_glyph_extents_t extents;
+                hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents);
 
-                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
-                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY));
-                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
-                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
-                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
-                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY + rect.height()));
+                mGidCache[cacheKey] = { node, { extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f } };
+
+                const float dstTop = dstY + (ascender - (extents.y_bearing / 64.f));
+                const float dstBottom = dstTop + rect.height();
+
+                // printf("extents2 %f %f %f %f\n", extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f);
+
+                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
+                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstTop));
+                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
+                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstBottom));
+                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstTop));
+                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstBottom));
 
                 dstX += pos[i].x_advance / 64.f;
             }
         }
-        dstY += LineHeight;
+        dstY += lineHeight;
     }
 
     mRender.transitionImageLayout(mImage, ImageFormat, vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eTransferDstOptimal);
