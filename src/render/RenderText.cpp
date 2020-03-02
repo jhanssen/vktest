@@ -46,12 +46,6 @@ static inline msdfgen::Point2 hbPoint2(hb_position_t x, hb_position_t y)
 
 static inline bool render(msdfgen::Shape& shape, hb_font_t* font, hb_font_extents_t* fontExtents, hb_draw_funcs_t* funcs, hb_codepoint_t gid, uint32_t descent)
 {
-    hb_glyph_extents_t extents = { 0 };
-    if (!hb_font_get_glyph_extents(font, gid, &extents)) {
-        // no extents, bail out
-        return false;
-    }
-
     DrawUserData user = { fontExtents->ascender, &shape, nullptr, msdfgen::Point2(), descent };
 
     hb_font_draw_glyph(font, gid, funcs, &user);
@@ -238,10 +232,14 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 }
 
                 hb_glyph_extents_t extents;
-                hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents);
-                const uint32_t descent = abs(extents.y_bearing + extents.height);
+                if (!hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents)) {
+                    // no extents
+                    dstX += pos[i].x_advance / 64.f;
+                    continue;
+                }
 
                 msdfgen::Shape shape;
+                const uint32_t descent = abs(extents.y_bearing + extents.height);
                 if (!render(shape, hbfont, &fontExtents, drawFuncs, info[i].codepoint, descent)) {
                     // nothing to render
                     dstX += pos[i].x_advance / 64.f;
