@@ -151,7 +151,9 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     auto contentsCacheHit = mContentsCache.find(contentsKey);
     if (contentsCacheHit != mContentsCache.end()) {
         // hit!
-        return *contentsCacheHit->second.renderedBuffer;
+        const auto& contents = contentsCacheHit->second;
+        vertexCount = contents.numVertices;
+        return *contents.renderedBuffer;
     }
 
     Font fontf(fontPath, text.size);
@@ -324,6 +326,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     FontContentsData contentsData;
     contentsData.renderedBuffer = std::move(buffer.buffer);
     contentsData.renderedBufferMemory = std::move(buffer.memory);
+    contentsData.numVertices = vertices.size();
 
     void* out = device->mapMemory(*contentsData.renderedBufferMemory, 0, bufferSize, {});
     memcpy(out, vertices.data(), bufferSize);
@@ -339,7 +342,6 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     // }
 
     vertexCount = vertices.size();
-
     return renderedBuffer;
 }
 

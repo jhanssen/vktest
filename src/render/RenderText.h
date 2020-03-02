@@ -55,6 +55,7 @@ private:
     {
         vk::UniqueBuffer renderedBuffer;
         vk::UniqueDeviceMemory renderedBufferMemory;
+        uint32_t numVertices;
     };
     struct FontContentsHasher
     {
