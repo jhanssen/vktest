@@ -7,7 +7,7 @@
 
 constexpr uint32_t ImageWidth = 1024;
 constexpr uint32_t ImageHeight = 1024;
-constexpr vk::Format ImageFormat = vk::Format::eR8G8B8A8Srgb;
+constexpr vk::Format ImageFormat = vk::Format::eR8Unorm;
 
 struct DrawUserData
 {
@@ -119,12 +119,13 @@ RenderText::RenderText(const Render& render)
     }
     device->bindImageMemory(*textureImage, *textureImageMemory, 0);
 
-    vk::DeviceSize imageSize = ImageWidth * ImageHeight * 4;
+    vk::DeviceSize imageSize = ImageWidth * ImageHeight;
     auto staging = mRender.createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
                                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
+    // don't know if I need to initialize the buffer memory?
     void* data = device->mapMemory(*staging.memory, 0, imageSize, {});
-    memset(data, 0xff, imageSize);
+    memset(data, 0x00, imageSize);
     device->unmapMemory(*staging.memory);
 
     // ### maybe add a transition directly from eUndefined to eShaderReadOnlyOptimal
@@ -183,7 +184,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     const auto screenWidth = mRender.window().width();
     const auto screenHeight = mRender.window().height();
     auto makeVertex = [screenWidth, screenHeight](float srcX, float srcY, float dstX, float dstY) -> RenderTextVertex {
-        printf("making dst vert %f %f -> %f %f\n", dstX, dstY, mixScreen(dstX, screenWidth), mixScreen(dstY, screenHeight));
+        // printf("making dst vert %f %f -> %f %f\n", dstX, dstY, mixScreen(dstX, screenWidth), mixScreen(dstY, screenHeight));
         return RenderTextVertex {
             { mixScreen(dstX, screenWidth), mixScreen(dstY, screenHeight) },
             { mixTexture(srcX, ImageWidth), mixTexture(srcY, ImageHeight) }
@@ -193,7 +194,8 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     const float LineHeight = 20.f;
     float dstX = rect.x, dstY = rect.y;
 
-    printf("text bally %fx%f\n", rect.x, rect.y);
+    const auto& device = mRender.window().device();
+    const vk::DeviceSize imageSize = ImageWidth * ImageHeight;
 
     for (const auto& line : layout.lines) {
         dstX = rect.x;
@@ -212,12 +214,12 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 if (cacheHit != mGidCache.end()) {
                     const RectPacker::Rect& rect = cacheHit->second.rect->rect;
                     // top-left, bottom-right, bottom-left, top-left, top-right, bottom-right
-                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY + rect.height()));
-                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY));
-                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY));
-                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY + rect.height()));
-                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY));
-                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY + rect.height()));
+                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
+                    vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY));
+                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
+                    vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
+                    vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
+                    vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY + rect.height()));
 
                     dstX += pos[i].x_advance / 64.f;
                     continue;
@@ -226,6 +228,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 msdfgen::Shape shape;
                 if (!render(shape, hbfont, &fontExtents, drawFuncs, info[i].codepoint)) {
                     // nothing to render
+                    dstX += pos[i].x_advance / 64.f;
                     continue;
                 }
                 if (!shape.validate()) {
@@ -247,27 +250,34 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 const int ymin = std::max<int>(0, floor(bounds.b) - range2);
                 const int ymax = std::min<int>(ref.height, ceil(bounds.t) + range2);
 
+                auto node = mRectPacker.insert(xmax - xmin, ymax - ymin);
+                const RectPacker::Rect& rect = node->rect;
+
+                uint8_t* data = static_cast<uint8_t*>(device->mapMemory(*mImageBufferMemory, 0, imageSize, {}));
+                data += rect.y * ImageWidth;
+
                 auto pixel = ref.pixels;
                 pixel += ymin * ref.width;
                 for (int row = ymin; row < ymax; ++row) {
                     pixel += xmin;
+                    data += rect.x;
                     for (int col = xmin; col < xmax; ++col) {
-                        // float v = msdfgen::clamp(int((*pixel++)*0x100), 0xff) / 255.f;
-
+                        *data++ = msdfgen::clamp(int((*pixel++)*0x100), 0xff);
                     }
                     pixel += ref.width - xmax;
+                    data += ImageWidth - (rect.x + (xmax - xmin));;
                 }
 
-                auto node = mRectPacker.insert(xmax - xmin, ymax - ymin);
+                device->unmapMemory(*mImageBufferMemory);
+
                 mGidCache[cacheKey] = { node };
 
-                const RectPacker::Rect& rect = node->rect;
-                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY + rect.height()));
-                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY));
-                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY));
-                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY + rect.height()));
-                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY));
-                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY + rect.height()));
+                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
+                vertices.push_back(makeVertex(rect.x, rect.bottom, dstX, dstY));
+                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
+                vertices.push_back(makeVertex(rect.x, rect.y, dstX, dstY + rect.height()));
+                vertices.push_back(makeVertex(rect.right, rect.bottom, dstX + rect.width(), dstY));
+                vertices.push_back(makeVertex(rect.right, rect.y, dstX + rect.width(), dstY + rect.height()));
 
                 dstX += pos[i].x_advance / 64.f;
             }
@@ -275,22 +285,24 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
         dstY += LineHeight;
     }
 
+    mRender.transitionImageLayout(mImage, ImageFormat, vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eTransferDstOptimal);
+    mRender.copyBufferToImage(mImageBuffer, mImage, ImageWidth, ImageHeight);
+    mRender.transitionImageLayout(mImage, ImageFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
     const vk::DeviceSize bufferSize = sizeof(RenderTextVertex) * vertices.size();
     auto buffer = mRender.createBuffer(bufferSize, vk::BufferUsageFlagBits::eVertexBuffer,
                                        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
     mRenderedBuffer = std::move(buffer.buffer);
     mRenderedBufferMemory = std::move(buffer.memory);
 
-    const auto& device = mRender.window().device();
-
     void* out = device->mapMemory(*mRenderedBufferMemory, 0, bufferSize, {});
     memcpy(out, vertices.data(), bufferSize);
     device->unmapMemory(*mRenderedBufferMemory);
 
-    printf("vertices %zu?\n", vertices.size());
-    for (const auto& v : vertices) {
-        printf("%f %f -> %f %f\n", v.src.x, v.src.y, v.dst.x, v.dst.y);
-    }
+    // printf("vertices %zu?\n", vertices.size());
+    // for (const auto& v : vertices) {
+    //     printf("%f %f -> %f %f\n", v.src.x, v.src.y, v.dst.x, v.dst.y);
+    // }
 
     vertexCount = vertices.size();
 

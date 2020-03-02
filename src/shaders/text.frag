@@ -9,5 +9,8 @@ layout(location = 1) in vec4 fragTexColor;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = fragTexColor * texture(texSampler, fragTexCoord).r;
+    float dist = texture(texSampler, fragTexCoord).r;
+    float a = smoothstep(0.507 - 0.07, 0.507 + 0.07, dist);
+    a = pow(a, 1.0 / 1.8);
+    outColor = fragTexColor * a;
 }
