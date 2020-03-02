@@ -48,6 +48,7 @@ private:
         std::string path;
         uint32_t size;
         std::string contents;
+        float x, y;
 
         bool operator==(const FontContentsKey&) const;
     };

@@ -147,7 +147,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
 {
     const std::string fontPath = "./font.ttf";
 
-    FontContentsKey contentsKey { fontPath, text.size, text.contents };
+    FontContentsKey contentsKey { fontPath, text.size, text.contents, rect.x, rect.y };
     auto contentsCacheHit = mContentsCache.find(contentsKey);
     if (contentsCacheHit != mContentsCache.end()) {
         // hit!
@@ -371,11 +371,11 @@ bool RenderText::FontGidKey::operator==(const FontGidKey& other) const
 size_t RenderText::FontContentsHasher::operator()(const FontContentsKey& key) const noexcept
 {
     size_t h;
-    hash_combine(h, key.path, key.size, key.contents);
+    hash_combine(h, key.path, key.size, key.contents, key.x, key.y);
     return h;
 }
 
 bool RenderText::FontContentsKey::operator==(const FontContentsKey& other) const
 {
-    return path == other.path && size == other.size && contents == other.contents;
+    return path == other.path && size == other.size && contents == other.contents && x == other.x && y == other.y;
 }
