@@ -15,6 +15,7 @@ struct DrawUserData
     msdfgen::Shape* shape;
     msdfgen::Contour* contour;
     msdfgen::Point2 position;
+    uint32_t descent;
 };
 
 struct Bounds
@@ -43,7 +44,7 @@ static inline msdfgen::Point2 hbPoint2(hb_position_t x, hb_position_t y)
     return msdfgen::Point2((1 / 64.) * x, (1 / 64.) * y);
 }
 
-static inline bool render(msdfgen::Shape& shape, hb_font_t* font, hb_font_extents_t* fontExtents, hb_draw_funcs_t* funcs, hb_codepoint_t gid)
+static inline bool render(msdfgen::Shape& shape, hb_font_t* font, hb_font_extents_t* fontExtents, hb_draw_funcs_t* funcs, hb_codepoint_t gid, uint32_t descent)
 {
     hb_glyph_extents_t extents = { 0 };
     if (!hb_font_get_glyph_extents(font, gid, &extents)) {
@@ -51,7 +52,7 @@ static inline bool render(msdfgen::Shape& shape, hb_font_t* font, hb_font_extent
         return false;
     }
 
-    DrawUserData user = { fontExtents->ascender, &shape, nullptr, msdfgen::Point2() };
+    DrawUserData user = { fontExtents->ascender, &shape, nullptr, msdfgen::Point2(), descent };
 
     hb_font_draw_glyph(font, gid, funcs, &user);
 
@@ -67,13 +68,13 @@ static void moveTo(hb_position_t to_x, hb_position_t to_y, void* user_data)
     if (!(data->contour && data->contour->edges.empty())) {
         data->contour = &data->shape->addContour();
     }
-    data->position = hbPoint2(to_x, to_y);
+    data->position = hbPoint2(to_x, to_y + data->descent);
 }
 
 static void lineTo(hb_position_t to_x, hb_position_t to_y, void* user_data)
 {
     DrawUserData* data = static_cast<DrawUserData*>(user_data);
-    const auto endpoint = hbPoint2(to_x, to_y);
+    const auto endpoint = hbPoint2(to_x, to_y + data->descent);
     if (endpoint != data->position) {
         data->contour->addEdge(new msdfgen::LinearSegment(data->position, endpoint));
         data->position = endpoint;
@@ -84,8 +85,8 @@ static void quadraticTo(hb_position_t control_x, hb_position_t control_y,
                         hb_position_t to_x, hb_position_t to_y, void* user_data)
 {
     DrawUserData* data = static_cast<DrawUserData*>(user_data);
-    data->contour->addEdge(new msdfgen::QuadraticSegment(data->position, hbPoint2(control_x, control_y), hbPoint2(to_x, to_y)));
-    data->position = hbPoint2(to_x, to_y);
+    data->contour->addEdge(new msdfgen::QuadraticSegment(data->position, hbPoint2(control_x, control_y + data->descent), hbPoint2(to_x, to_y + data->descent)));
+    data->position = hbPoint2(to_x, to_y + data->descent);
 }
 
 static void cubicTo(hb_position_t control1_x, hb_position_t control1_y,
@@ -93,8 +94,8 @@ static void cubicTo(hb_position_t control1_x, hb_position_t control1_y,
                     hb_position_t to_x, hb_position_t to_y, void* user_data)
 {
     DrawUserData* data = static_cast<DrawUserData*>(user_data);
-    data->contour->addEdge(new msdfgen::CubicSegment(data->position, hbPoint2(control1_x, control1_y), hbPoint2(control2_x, control2_y), hbPoint2(to_x, to_y)));
-    data->position = hbPoint2(to_x, to_y);
+    data->contour->addEdge(new msdfgen::CubicSegment(data->position, hbPoint2(control1_x, control1_y + data->descent), hbPoint2(control2_x, control2_y + data->descent), hbPoint2(to_x, to_y + data->descent)));
+    data->position = hbPoint2(to_x, to_y + data->descent);
 }
 
 RenderText::RenderText(const Render& render)
@@ -236,8 +237,12 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                     continue;
                 }
 
+                hb_glyph_extents_t extents;
+                hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents);
+                const uint32_t descent = abs(extents.y_bearing + extents.height);
+
                 msdfgen::Shape shape;
-                if (!render(shape, hbfont, &fontExtents, drawFuncs, info[i].codepoint)) {
+                if (!render(shape, hbfont, &fontExtents, drawFuncs, info[i].codepoint, descent)) {
                     // nothing to render
                     dstX += pos[i].x_advance / 64.f;
                     continue;
@@ -280,9 +285,6 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
                 }
 
                 device->unmapMemory(*mImageBufferMemory);
-
-                hb_glyph_extents_t extents;
-                hb_font_get_glyph_extents(hbfont, info[i].codepoint, &extents);
 
                 mGidCache[cacheKey] = { node, { extents.x_bearing / 64.f, extents.y_bearing / 64.f, extents.width / 64.f, extents.height / 64.f } };
 
