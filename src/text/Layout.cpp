@@ -1,6 +1,8 @@
 #include "Layout.h"
 #include <unicode/brkiter.h>
 #include <unicode/locid.h>
+#include <algorithm>
+#include <assert.h>
 
 #define ISNEWLINE(c)                                    \
     (((c) >= 0xa && (c) <= 0xd) ||                      \
