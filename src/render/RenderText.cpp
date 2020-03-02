@@ -179,7 +179,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     Bounds bounds;
 
     std::vector<RenderTextVertex> vertices;
-    vertices.reserve(layout.runCount() * 4);
+    vertices.reserve(layout.runCount() * 6);
 
     const auto screenWidth = mRender.window().width();
     const auto screenHeight = mRender.window().height();
