@@ -370,7 +370,7 @@ bool RenderText::FontGidKey::operator==(const FontGidKey& other) const
 
 size_t RenderText::FontContentsHasher::operator()(const FontContentsKey& key) const noexcept
 {
-    size_t h;
+    size_t h = 0;
     hash_combine(h, key.path, key.size, key.contents, key.x, key.y);
     return h;
 }
