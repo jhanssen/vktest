@@ -43,6 +43,23 @@ private:
     {
         size_t operator()(const FontGidKey&) const noexcept;
     };
+    struct FontContentsKey
+    {
+        std::string path;
+        uint32_t size;
+        std::string contents;
+
+        bool operator==(const FontContentsKey&) const;
+    };
+    struct FontContentsData
+    {
+        vk::UniqueBuffer renderedBuffer;
+        vk::UniqueDeviceMemory renderedBufferMemory;
+    };
+    struct FontContentsHasher
+    {
+        size_t operator()(const FontContentsKey&) const noexcept;
+    };
 
     const Render& mRender;
 
@@ -53,10 +70,8 @@ private:
     vk::UniqueBuffer mImageBuffer;
     vk::UniqueDeviceMemory mImageBufferMemory;
 
-    vk::UniqueBuffer mRenderedBuffer;
-    vk::UniqueDeviceMemory mRenderedBufferMemory;
-
     std::unordered_map<FontGidKey, FontGidData, FontGidHasher> mGidCache;
+    std::unordered_map<FontContentsKey, FontContentsData, FontContentsHasher> mContentsCache;
 };
 
 struct RenderTextVertex

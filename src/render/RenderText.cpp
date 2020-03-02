@@ -145,7 +145,16 @@ vk::UniqueImageView RenderText::imageView()
 
 vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& vertexCount)
 {
-    Font fontf("./font.ttf", text.size);
+    const std::string fontPath = "./font.ttf";
+
+    FontContentsKey contentsKey { fontPath, text.size, text.contents };
+    auto contentsCacheHit = mContentsCache.find(contentsKey);
+    if (contentsCacheHit != mContentsCache.end()) {
+        // hit!
+        return *contentsCacheHit->second.renderedBuffer;
+    }
+
+    Font fontf(fontPath, text.size);
     const auto hbfont = fontf.font();
 
     Layout layout(fontf);
@@ -311,12 +320,18 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
     const vk::DeviceSize bufferSize = sizeof(RenderTextVertex) * vertices.size();
     auto buffer = mRender.createBuffer(bufferSize, vk::BufferUsageFlagBits::eVertexBuffer,
                                        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-    mRenderedBuffer = std::move(buffer.buffer);
-    mRenderedBufferMemory = std::move(buffer.memory);
 
-    void* out = device->mapMemory(*mRenderedBufferMemory, 0, bufferSize, {});
+    FontContentsData contentsData;
+    contentsData.renderedBuffer = std::move(buffer.buffer);
+    contentsData.renderedBufferMemory = std::move(buffer.memory);
+
+    void* out = device->mapMemory(*contentsData.renderedBufferMemory, 0, bufferSize, {});
     memcpy(out, vertices.data(), bufferSize);
-    device->unmapMemory(*mRenderedBufferMemory);
+    device->unmapMemory(*contentsData.renderedBufferMemory);
+
+    auto renderedBuffer = *contentsData.renderedBuffer;
+
+    mContentsCache[contentsKey] = std::move(contentsData);
 
     // printf("vertices %zu?\n", vertices.size());
     // for (const auto& v : vertices) {
@@ -325,7 +340,7 @@ vk::Buffer RenderText::renderText(const Text& text, const Rect& rect, uint32_t& 
 
     vertexCount = vertices.size();
 
-    return *mRenderedBuffer;
+    return renderedBuffer;
 }
 
 // lifted from https://stackoverflow.com/questions/2590677/how-do-i-combine-hash-values-in-c0x
@@ -349,4 +364,16 @@ size_t RenderText::FontGidHasher::operator()(const FontGidKey& key) const noexce
 bool RenderText::FontGidKey::operator==(const FontGidKey& other) const
 {
     return path == other.path && size == other.size && gid == other.gid;
+}
+
+size_t RenderText::FontContentsHasher::operator()(const FontContentsKey& key) const noexcept
+{
+    size_t h;
+    hash_combine(h, key.path, key.size, key.contents);
+    return h;
+}
+
+bool RenderText::FontContentsKey::operator==(const FontContentsKey& other) const
+{
+    return path == other.path && size == other.size && contents == other.contents;
 }
