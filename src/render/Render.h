@@ -101,7 +101,7 @@ private:
     void renderNode(const std::shared_ptr<Node>& node, const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
 
     vk::CommandBuffer beginSingleCommand() const;
-    void endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue = true) const;
+    void endSingleCommand(const vk::CommandBuffer& commandBuffer) const;
 
 private:
     const Window& mWindow;

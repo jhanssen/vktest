@@ -174,20 +174,18 @@ vk::CommandBuffer Render::beginSingleCommand() const
     return commandBuffer;
 }
 
-void Render::endSingleCommand(const vk::CommandBuffer& commandBuffer, bool enqueue) const
+void Render::endSingleCommand(const vk::CommandBuffer& commandBuffer) const
 {
     const auto& device = mWindow.device();
 
     commandBuffer.end();
 
-    if (enqueue) {
-        const auto& graphicsQueue = mWindow.graphicsQueue();
+    const auto& graphicsQueue = mWindow.graphicsQueue();
 
-        vk::SubmitInfo submitInfo({}, {}, {}, 1, &commandBuffer);
+    vk::SubmitInfo submitInfo({}, {}, {}, 1, &commandBuffer);
 
-        graphicsQueue.submit({ submitInfo }, {});
-        graphicsQueue.waitIdle();
-    }
+    graphicsQueue.submit({ submitInfo }, {});
+    graphicsQueue.waitIdle();
 
     device->freeCommandBuffers(*mCommandPool, { commandBuffer });
 }
@@ -828,6 +826,7 @@ void Render::render(const Window::RenderData& data)
     const auto& extent = mWindow.extent();
     const auto& renderPass = mWindow.renderPass();
     const auto& swapChainFramebuffers = mWindow.swapChainFramebuffers();
+    const auto& device = mWindow.device();
 
     const auto& commandBuffer = beginSingleCommand();
 
@@ -850,9 +849,10 @@ void Render::render(const Window::RenderData& data)
 
     try {
         graphicsQueue.submit({ submitInfo }, data.fence);
+        graphicsQueue.waitIdle();
     } catch (const vk::Error& error) {
         printf("failed to submit draw command buffer\n");
     }
 
-    endSingleCommand(commandBuffer, false);
+    device->freeCommandBuffers(*mCommandPool, { commandBuffer });
 }
